@@ -1,6 +1,8 @@
 # irc
 IRC server / Client demo project
 
+Don't copy this project since it is just a test. Not compatible with anything, ever! So please go away :)
+
 
 
 IRC Server & Client C:llä
