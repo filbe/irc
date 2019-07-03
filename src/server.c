@@ -38,7 +38,7 @@ struct users {
 	struct users *next;
 };
 
-struct users *all_users;
+struct users **all_users;
 struct users *last_user;
 
 int recv_socket = -1;
@@ -52,12 +52,12 @@ void adduser(struct user _u)
 	last_user->next = n;
 	n->prev = last_user;
 	last_user = n;
-	printf("%s %d %s %d %d\n", u->nick, u->socket, _u.nick, _u.socket, all_users->user->socket);
+	printf("%s %d %s %d %d\n", u->nick, u->socket, _u.nick, _u.socket, (*all_users)->user->socket);
 }
 
 void removeuser(struct user *u)
 {
-	struct users *current = all_users;
+	struct users *current = *all_users;
 	while (current->user != NULL) {
 		if (strcmp(u->nick, current->user->nick) == 0) {
 			current->next->prev = current->prev;
@@ -71,7 +71,7 @@ void removeuser(struct user *u)
 
 void listusers()
 {
-	struct users *current = all_users;
+	struct users *current = *all_users;
 	printf("all users:\n");
 	while (current->user != NULL) {
 	printf("%s\n", current->user->nick);
@@ -81,14 +81,15 @@ void listusers()
 
 void init_users()
 {
-	all_users = malloc(sizeof(struct users));
-	last_user = all_users;
+	last_user = malloc(sizeof(struct users));
+	memset(last_user, 0, sizeof(struct users));
+	all_users = &last_user;
 }
 
 void clear_users()
 {
 	while (all_users) {
-		struct users *next = all_users->next;
+		struct users **next = &((*all_users)->next);
 		free(all_users);
 		all_users = next;
 	}
