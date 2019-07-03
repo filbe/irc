@@ -27,13 +27,11 @@ Tällä hetkellä socketin lukeminen jää odottamaan dataa niin pitkäksi aikaa
 
 */
 
-struct user {
-	char *nick;
-	int socket;
-};
+
 
 struct users {
-	struct user *user;
+	char nick[128];
+	int socket;
 	struct users *prev;
 	struct users *next;
 };
@@ -43,61 +41,43 @@ struct users *last_user;
 
 int recv_socket = -1;
 
-void adduser(struct user _u)
+void adduser(char *nick, int socket)
 {
-	struct users *n = malloc(sizeof(struct users));
-	struct user *u = malloc(sizeof(struct user));
-	memcpy(u, &_u, sizeof(struct user));
-	n->user = u;
-	last_user->next = n;
-	n->prev = last_user;
-	last_user = n;
-	printf("%s %d %s %d %d\n", u->nick, u->socket, _u.nick, _u.socket, all_users->user->socket);
+	struct users *new_user = malloc(sizeof(struct users));
+	strcpy(new_user->nick, nick);
+	new_user->socket = socket;
+	new_user->prev = last_user;
+	last_user->next = new_user;
+	last_user = new_user;
+
 }
 
-void removeuser(struct user *u)
+void removeuser(char *nick)
 {
-	struct users *current = all_users;
-	while (current->user != NULL) {
-		if (strcmp(u->nick, current->user->nick) == 0) {
-			current->next->prev = current->prev;
-			current->prev->next = current->next;
-			free(u);
-			break;
-		}
-		current = current->next;
-	}
+
 }
 
 void listusers()
 {
-	struct users *current = all_users;
-	printf("all users:\n");
-	while (current->user != NULL) {
-		printf("%s\n", current->user->nick);
-		if  (current->next == NULL) {
-			break;
-		}
-		current = current->next;
+	struct users *cur_u;
+	cur_u = all_users;
+	printf("Listing all users:\n");
+	while (cur_u->nick) {
+		printf("- %s\n", cur_u->nick);
+		cur_u = cur_u->next;
 	}
+	printf("________________\n");
 }
 
 void init_users()
 {
-	last_user = malloc(sizeof(struct users));
-	last_user->user = malloc(sizeof(struct user));
-	last_user->user->nick = "jotaki";
-	all_users = last_user;
-	printf("all_users->user->nick: %s\n", all_users->user->nick);
+	all_users = malloc(sizeof(struct users));
+	last_user = all_users;
 }
 
 void clear_users()
 {
-	while (all_users) {
-		struct users *next = all_users->next;
-		free(all_users);
-		all_users = next;
-	}
+
 }
 
 int server_fd, new_socket, valread, max_sd;
@@ -168,10 +148,8 @@ void receive_sync(char ** received_msg)
 		char *word = strtok(buffer, delim);
 		if (strcmp(word, "/nick") == 0) {
 			word = strtok(NULL, delim);
-			struct user new_user;
-			new_user.nick = word;
-			new_user.socket = new_socket;
-			adduser(new_user);
+			adduser(word, new_socket);
+
 			printf("nick set: %s\nsocket: %d\n", word, new_socket);
 		} else {
 			printf("paskaa\n");
