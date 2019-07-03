@@ -38,8 +38,8 @@ struct users {
 	struct users *next;
 };
 
-struct users **all_users;
-struct users *last_user;
+struct users **all_users = NULL;
+struct users *last_user = NULL;
 
 int recv_socket = -1;
 
@@ -48,9 +48,11 @@ void adduser(struct user _u)
 	struct users *n = malloc(sizeof(struct users));
 	struct user *u = malloc(sizeof(struct user));
 	memcpy(u, &_u, sizeof(struct user));
+
 	n->user = u;
 	last_user->next = n;
 	n->prev = last_user;
+	n->next = NULL;
 	last_user = n;
 	printf("%s %d %s %d %d\n", u->nick, u->socket, _u.nick, _u.socket, (*all_users)->user->socket);
 }
@@ -75,6 +77,9 @@ void listusers()
 	printf("all users:\n");
 	while (current->user != NULL) {
 	printf("%s\n", current->user->nick);
+		if (current->next == NULL) {
+			break;
+		}
 		current = current->next;
 	}
 }
@@ -82,6 +87,8 @@ void listusers()
 void init_users()
 {
 	last_user = malloc(sizeof(struct users));
+	all_users = malloc(sizeof(struct users));
+	memset(last_user, 0, sizeof(struct users));
 	memset(last_user, 0, sizeof(struct users));
 	all_users = &last_user;
 }
@@ -164,6 +171,7 @@ void receive_sync(char ** received_msg)
 		if (strcmp(word, "/nick") == 0){
 			word = strtok(NULL, delim);
 			struct user new_user;
+			memset(&new_user, 0, sizeof(struct user));
 			new_user.nick = word;
 			new_user.socket = new_socket;
 			adduser(new_user);
