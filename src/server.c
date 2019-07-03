@@ -38,8 +38,8 @@ struct users {
 	struct users *next;
 };
 
-struct users **all_users = NULL;
-struct users *last_user = NULL;
+struct users *all_users;
+struct users *last_user;
 
 int recv_socket = -1;
 
@@ -48,18 +48,16 @@ void adduser(struct user _u)
 	struct users *n = malloc(sizeof(struct users));
 	struct user *u = malloc(sizeof(struct user));
 	memcpy(u, &_u, sizeof(struct user));
-
 	n->user = u;
 	last_user->next = n;
 	n->prev = last_user;
-	n->next = NULL;
 	last_user = n;
-	printf("%s %d %s %d %d\n", u->nick, u->socket, _u.nick, _u.socket, (*all_users)->user->socket);
+	printf("%s %d %s %d %d\n", u->nick, u->socket, _u.nick, _u.socket, all_users->user->socket);
 }
 
 void removeuser(struct user *u)
 {
-	struct users *current = *all_users;
+	struct users *current = all_users;
 	while (current->user != NULL) {
 		if (strcmp(u->nick, current->user->nick) == 0) {
 			current->next->prev = current->prev;
@@ -73,11 +71,11 @@ void removeuser(struct user *u)
 
 void listusers()
 {
-	struct users *current = *all_users;
+	struct users *current = all_users;
 	printf("all users:\n");
 	while (current->user != NULL) {
-	printf("%s\n", current->user->nick);
-		if (current->next == NULL) {
+		printf("%s\n", current->user->nick);
+		if  (current->next == NULL) {
 			break;
 		}
 		current = current->next;
@@ -87,16 +85,16 @@ void listusers()
 void init_users()
 {
 	last_user = malloc(sizeof(struct users));
-	all_users = malloc(sizeof(struct users));
-	memset(last_user, 0, sizeof(struct users));
-	memset(last_user, 0, sizeof(struct users));
-	all_users = &last_user;
+	last_user->user = malloc(sizeof(struct user));
+	last_user->user->nick = "jotaki";
+	all_users = last_user;
+	printf("all_users->user->nick: %s\n", all_users->user->nick);
 }
 
 void clear_users()
 {
 	while (all_users) {
-		struct users **next = &((*all_users)->next);
+		struct users *next = all_users->next;
 		free(all_users);
 		all_users = next;
 	}
@@ -168,10 +166,9 @@ void receive_sync(char ** received_msg)
 		valread = read( new_socket , buffer, 1024);
 		char *delim = " ";
 		char *word = strtok(buffer, delim);
-		if (strcmp(word, "/nick") == 0){
+		if (strcmp(word, "/nick") == 0) {
 			word = strtok(NULL, delim);
 			struct user new_user;
-			memset(&new_user, 0, sizeof(struct user));
 			new_user.nick = word;
 			new_user.socket = new_socket;
 			adduser(new_user);
