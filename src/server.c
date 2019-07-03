@@ -4,7 +4,8 @@
 #include <stdlib.h>
 #include <netinet/in.h>
 #include <string.h>
-
+#include <time.h>
+#include <errno.h>
 /*
 
 Serverillä pidetään kirjaa irc-kanavien käyttäjistä ja niihin liittyvästä socketeista.
@@ -16,7 +17,7 @@ Tällä hetkellä socketin lukeminen jää odottamaan dataa niin pitkäksi aikaa
 	- tämä mahdollistaa useiden sockettien statuksen tutkimisen peräkkäin ilman, että jokaisesta on saatavilla dataa heti
 
 - muuta ohjelmaa siten, että uudelta käyttäjältä vaaditaan ensimmäisessä viestissä käyttäjätunnus jossakin formaatissa.
-	- tarkastetaan, että käyttäjätunnus on vapaana. Jos ei ole, hylätään yhteydenottopyyntö 
+	- tarkastetaan, että käyttäjätunnus on vapaana. Jos ei ole, hylätään yhteydenottopyyntö
 	asianmukaisella virhesanomalla (käyttäjätunnus varattu / käyttäjätunnusta ei annettu oikeassa formaatissa)
 	- jos käyttäjätunnus on vapaana, luodaan uusi käyttäjä kyseisellä nickillä ja liitetään socket siihen
 
@@ -42,13 +43,16 @@ struct users *last_user;
 
 int recv_socket = -1;
 
-void adduser(struct user *u)
+void adduser(struct user _u)
 {
 	struct users *n = malloc(sizeof(struct users));
+	struct user *u = malloc(sizeof(struct user));
+	memcpy(u, &_u, sizeof(struct user));
 	n->user = u;
 	last_user->next = n;
 	n->prev = last_user;
 	last_user = n;
+	printf("%s %d %s %d %d\n", u->nick, u->socket, _u.nick, _u.socket, all_users->user->socket);
 }
 
 void removeuser(struct user *u)
@@ -61,6 +65,16 @@ void removeuser(struct user *u)
 			free(u);
 			break;
 		}
+		current = current->next;
+	}
+}
+
+void listusers()
+{
+	struct users *current = all_users;
+	printf("all users:\n");
+	while (current->user != NULL) {
+	printf("%s\n", current->user->nick);
 		current = current->next;
 	}
 }
@@ -80,11 +94,12 @@ void clear_users()
 	}
 }
 
-int server_fd, new_socket, valread;
+int server_fd, new_socket, valread, max_sd;
 struct sockaddr_in address;
 int opt;
 int addrlen;
 char buffer[1024];
+fd_set readfds;
 
 void init_connection(int port)
 {
@@ -117,30 +132,62 @@ void init_connection(int port)
 		perror("listen");
 		exit(EXIT_FAILURE);
 	}
+	max_sd = server_fd;
+
+	// Clear an fd_set
+	FD_ZERO(&readfds);
+
+	// Add a descriptor to an fd_set
+	FD_SET(server_fd, &readfds);
+
 }
 
 void receive_sync(char ** received_msg)
 {
-	char *hello = "Hello from server";
-	if ((new_socket = accept(server_fd, (struct sockaddr *)&address,
-	                         (socklen_t*)&addrlen)) < 0) {
-		perror("accept");
-		exit(EXIT_FAILURE);
+	int activity = select( max_sd + 1 , &readfds , NULL , NULL , NULL);
+
+	if ((activity < 0) && (errno != EINTR)) {
+		printf("select error");
 	}
-	valread = read( new_socket , buffer, 1024);
-	printf("%s\n", buffer );
-	send(new_socket , hello , strlen(hello) , 0 );
-	printf("Hello message sent\n");
+
+	char *hello = "Hello from server";
+	if (FD_ISSET(server_fd, &readfds)) {
+		if ((new_socket = accept(server_fd,
+		                         (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {
+			perror("accept");
+			exit(EXIT_FAILURE);
+		}
+		valread = read( new_socket , buffer, 1024);
+		char *delim = " ";
+		char *word = strtok(buffer, delim);
+		if (strcmp(word, "/nick") == 0){
+			word = strtok(NULL, delim);
+			struct user new_user;
+			new_user.nick = word;
+			new_user.socket = new_socket;
+			adduser(new_user);
+			printf("nick set: %s\nsocket: %d\n", word, new_socket);
+		} else {
+			printf("paskaa\n");
+		}
+		printf("%s\n", buffer );
+		send(new_socket , hello , strlen(hello) , 0 );
+		printf("Hello message sent\n");
+		listusers();
+		return;
+	}
+
+
 }
 
 int main()
 {
 	int port = 6667;
-	
+
 	init_users();
 	init_connection(port);
 
-	char **received_msg;
+	char **received_msg = NULL;
 	while (1) {
 		receive_sync(received_msg);
 	}

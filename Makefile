@@ -2,10 +2,6 @@ CC = gcc
 
 CFLAGS = -static -g -Wall
 
-SRC = 
-=======
-CFLAGS = -Wall
-
 SRC = src/
 
 objects = server client
