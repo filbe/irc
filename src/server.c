@@ -5,6 +5,27 @@
 #include <netinet/in.h>
 #include <string.h>
 
+/*
+
+Serverillä pidetään kirjaa irc-kanavien käyttäjistä ja niihin liittyvästä socketeista.
+Serverillä on lisäksi pääsocket (recv_socket), jolla vastaanotetaan uusien käyttäjien saapuvat socketit.
+
+TODO:
+Tällä hetkellä socketin lukeminen jää odottamaan dataa niin pitkäksi aikaa kunnes dataa on saatavilla.
+- muuta ohjelmaa siten, että socketin statuksen voi tarkastaa ilman, että jäädään odottamaan dataa
+	- tämä mahdollistaa useiden sockettien statuksen tutkimisen peräkkäin ilman, että jokaisesta on saatavilla dataa heti
+
+- muuta ohjelmaa siten, että uudelta käyttäjältä vaaditaan ensimmäisessä viestissä käyttäjätunnus jossakin formaatissa.
+	- tarkastetaan, että käyttäjätunnus on vapaana. Jos ei ole, hylätään yhteydenottopyyntö 
+	asianmukaisella virhesanomalla (käyttäjätunnus varattu / käyttäjätunnusta ei annettu oikeassa formaatissa)
+	- jos käyttäjätunnus on vapaana, luodaan uusi käyttäjä kyseisellä nickillä ja liitetään socket siihen
+
+- käydään läpi kaikki tallennetut socketit ja tarkastetaan, onko niihin tullut dataa
+
+- parsitaan käyttäjän lähettämä data (toteutetaan komennot ja viestittelymahdollisuus)
+
+*/
+
 struct user {
 	char *nick;
 	int socket;
@@ -87,7 +108,6 @@ void init_connection(int port)
 	address.sin_addr.s_addr = INADDR_ANY;
 	address.sin_port = htons( port );
 
-	// Forcefully attaching socket to the port 8080
 	if (bind(server_fd, (struct sockaddr *)&address,
 	         sizeof(address)) < 0) {
 		perror("bind failed");
