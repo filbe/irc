@@ -1,5 +1,6 @@
 CC = gcc
-CFLAGS = -Wall
+
+CFLAGS = -static -g -Wall
 
 SRC = src/
 
