@@ -140,7 +140,7 @@ int main()
 	init_users();
 	init_connection(port);
 
-	char **received_msg;
+	char **received_msg = NULL;
 	while (1) {
 		receive_sync(received_msg);
 	}
