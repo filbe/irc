@@ -279,7 +279,7 @@ void init_connection(int port)
 
 }
 
-void send_everyone_but(char *nick, char *send_string)
+void send_everyone(char *nick, char *send_string)
 {
 	char msg[4096] = "";
 	strcat(msg, nick);
@@ -372,7 +372,7 @@ void receive_sync(char ** received_msg)
 					char *msg = strtok(buffer, linebreak);
 
 					printf("MSG from %s: %s\n", cur_u->nick, msg);
-					send_everyone_but(cur_u->nick, msg);
+					send_everyone(cur_u->nick, msg);
 					return;
 				}
 
@@ -386,7 +386,7 @@ void receive_sync(char ** received_msg)
 
 int main(int argc, char *argv[])
 {
-	if (argc > 3) {
+	if (argc > 8) {
 		printf("Too many parameters!\n");
 		return 0;
 	}
@@ -414,7 +414,7 @@ int main(int argc, char *argv[])
 			free(argument);
 			asprintf(&argument, "%s", argv[++i]);
 			filename = argument;
-			printf("connections: %s\n", connections);
+			printf("welcome file: %s\n", filename);
 		} else if (strcmp(argument, "-p") != 0 || strcmp(argument, "--port") != 0 || strcmp(argument, "-c") != 0 || strcmp(argument, "--connections") != 0) {
 			printf("Invalid command line argument(s)!\n");
 			free(argument);
