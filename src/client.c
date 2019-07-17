@@ -4,6 +4,7 @@
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/select.h>
+#include <sys/time.h>
 #include <stdlib.h>
 #include <netinet/in.h>
 #include <string.h>
@@ -12,6 +13,7 @@
 #include <arpa/inet.h>
 #include <pthread.h>
 #include <unistd.h>
+
 
 #define FLUSH_STDIN(x) {if(x[strlen(x)-1]!='\n'){do fgets(Junk,16,stdin);while(Junk[strlen(Junk)-1]!='\n');}else x[strlen(x)-1]='\0';}
 char Junk[16];
@@ -28,30 +30,30 @@ int sockfd, data_writing = 0, data_reading = 0;
 
 void *recv_server()
 {
+	char recv_buff[MAXBUFSIZE];
+
 	while (1) {
-		int activity = select( sockfd + 1 , &readfds , NULL , NULL , NULL);
+		int activity = select( sockfd , &readfds , NULL , NULL , NULL);
+		printf("RR = %d\n",activity);
+		if (activity > 0) {
+			if (data_writing == 0 && FD_ISSET(sockfd, &readfds)) {
+				data_reading = 1;
 
-		if ((activity < 0) && (errno != EINTR)) {
-			printf("select error");
+				bzero(recv_buff, sizeof(recv_buff));
+				printf("reading\n");
+				read(sockfd, recv_buff, sizeof(recv_buff));
+				printf("red.\n");
+				data_reading = 0;
+				printf("%s\n", recv_buff);
+				FD_ZERO(&readfds);
+				FD_SET(sockfd, &readfds);
+
+			} else {
+				printf("No data avail.\n");
+			}
+			sleep(1);
 		}
-
-		if (activity == 0) {
-			continue;
-		}
-
-		if (data_writing == 0 && FD_ISSET(sockfd, &readfds)) {
-			data_reading = 1;
-			char recv_buff[MAXBUFSIZE];
-			bzero(recv_buff, sizeof(recv_buff));
-			printf("reading\n");
-			read(sockfd, recv_buff, sizeof(recv_buff));
-			printf("red.\n");
-			data_reading = 0;
-			printf("%s\n", recv_buff);
-			FD_ZERO(&readfds);
-			FD_SET(sockfd, &readfds);
-
-		}
+		sleep(1);
 	}
 }
 
@@ -112,6 +114,11 @@ int main(int argc, char *argv[])
 
 		pthread_t t_recv;
 
+
+		FD_ZERO(&readfds);
+		FD_SET(sockfd, &readfds);
+
+
 		pthread_create(&t_recv, NULL, recv_server, NULL);
 		char send_buff[MAXBUFSIZE];
 		memset(send_buff, 0, sizeof send_buff);
@@ -134,7 +141,12 @@ int main(int argc, char *argv[])
 				while (data_reading == 1) {};
 				printf("writing\n");
 				int r = write(sockfd, buff, strlen(buff));
-				printf("wrote %d bytes\n",r);
+				char buf[1024];
+				read(sockfd, buf, 1024);
+				printf("%s\n", buf);
+				FD_ZERO(&readfds);
+				FD_SET(sockfd, &readfds);
+				printf("wrote %d bytes\n", r);
 				data_writing = 0;
 				bzero(buff, sizeof(buff));
 			}

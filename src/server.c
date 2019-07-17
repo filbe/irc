@@ -182,14 +182,14 @@ void send_everyone_but(char *nick, char *send_string)
 	struct users *cur_u;
 	cur_u = all_users;
 	while (cur_u->nick) {
-		if (strcmp(cur_u->nick, nick) != 0) {
+		//if (strcmp(cur_u->nick, nick) != 0) {
 			char tosend[65535];
 			strcat(tosend, nick);
 			strcat(tosend, "> ");
 			strcat(tosend, send_string);
 			strcat(tosend, "\n");
 			send(cur_u->socket ,  tosend, strlen(tosend) , 0);
-		}
+		//}
 		cur_u = cur_u->next;
 	}
 }
