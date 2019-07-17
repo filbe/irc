@@ -1,6 +1,6 @@
 CC = gcc
 
-CFLAGS = -static -g -Wall
+CFLAGS = -static -g -Wall  -pthread
 
 SRC = src/
 

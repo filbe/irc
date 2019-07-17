@@ -1,6 +1,7 @@
 #define _GNU_SOURCE
 #include <unistd.h>
 #include <stdio.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/select.h>
 #include <stdlib.h>
@@ -8,98 +9,42 @@
 #include <string.h>
 #include <time.h>
 #include <errno.h>
-#include <termios.h>
-// #include <conio.h>
-#define MAX 65535
+#include <arpa/inet.h>
+#include <pthread.h>
+#include <unistd.h>
+
+#define FLUSH_STDIN(x) {if(x[strlen(x)-1]!='\n'){do fgets(Junk,16,stdin);while(Junk[strlen(Junk)-1]!='\n');}else x[strlen(x)-1]='\0';}
+char Junk[16];
+
+#define MAXBUFSIZE 65535
 // #define PORT 1234
 #define SA struct sockaddr
 
 fd_set readfds;
 
-struct termios orig_termios;
+char *nick = "";
 
-void reset_terminal_mode()
+int sockfd;
+
+void *recv_server()
 {
-	tcsetattr(0, TCSANOW, &orig_termios);
-}
-
-void set_conio_terminal_mode()
-{
-	struct termios new_termios;
-
-	/* take two copies - one for now, one for later */
-	tcgetattr(0, &orig_termios);
-	memcpy(&new_termios, &orig_termios, sizeof(new_termios));
-
-	/* register cleanup handler, and set the new terminal mode */
-	atexit(reset_terminal_mode);
-	cfmakeraw(&new_termios);
-	tcsetattr(0, TCSANOW, &new_termios);
-}
-
-int kbhit()
-{
-	struct timeval tv = { 0L, 0L };
-	fd_set fds;
-	FD_ZERO(&fds);
-	FD_SET(0, &fds);
-	return select(1, &fds, NULL, NULL, &tv);
-}
-
-int getch()
-{
-	int r;
-	unsigned char c;
-	if ((r = read(0, &c, sizeof(c))) < 0) {
-		return r;
-	} else {
-		return c;
-	}
-}
-
-void func(int sockfd)
-{
-	char buff[MAX];
-	for (;;) {
-		bzero(buff, sizeof(buff));
+	while (1) {
+		char recv_buff[MAXBUFSIZE];
+		bzero(recv_buff, sizeof(recv_buff));
+		read(sockfd, recv_buff, sizeof(recv_buff));
+		//printf("%s\n", recv_buff);
 		FD_ZERO(&readfds);
 		FD_SET(sockfd, &readfds);
-		printf("Enter the string : ");
-		set_conio_terminal_mode();
-		while (!kbhit()) {
-			for (int i = 0; i < strlen(buff); i++) {
-				if (buff[i] == '\n') {
-					buff[i] = 0;
-					write(sockfd, buff, i + 1);
-				}
-			}
-			(void)getch(); /* consume the character */
-			printf("%s", buff);
-
-		}
-
-
-		if (FD_ISSET(sockfd, &readfds)) {
-			bzero(buff, sizeof(buff));
-			read(sockfd, buff, sizeof(buff));
-			printf("From Server : %s\n", buff);
-		}
-	}
-
-	if ((strncmp(buff, "exit", 4)) == 0) {
-		printf("Client Exit...\n");
-		return 0;
 	}
 }
-
 
 int main(int argc, char *argv[])
 {
-	int sockfd, connfd;
-	struct sockaddr_in servaddr, cli;
+	int sockfd;
+	struct sockaddr_in servaddr;
 	char *argument = "";
 	int port = 0;
-	char *nick = "";
+
 	char channels[40];
 
 	for (int i = 1; i < argc; i++) {
@@ -117,7 +62,7 @@ int main(int argc, char *argv[])
 		} else if (strcmp(argument, "-c") == 0 || strcmp(argument, "--channels") == 0) {
 			free(argument);
 			asprintf(&argument, "%s", argv[++i]);
-			channels[i - 1] = argument;
+			channels[i - 1] = *argument;
 			printf("port: %s\n", channels);
 		} else if (strcmp(argument, "-p") != 0 || strcmp(argument, "--port") != 0 || strcmp(argument, "-n") != 0 || strcmp(argument, "--nick") != 0
 		           || strcmp(argument, "-c") != 0 || strcmp(argument, "-channel") != 0) {
@@ -144,13 +89,48 @@ int main(int argc, char *argv[])
 		if (connect(sockfd, (SA*)&servaddr, sizeof(servaddr)) != 0) {
 			printf("connection with the server failed...\n");
 			exit(0);
-		} else
+		} else {
 			printf("connected to the server..\n");
+		}
 
-		// function for chat
-		func(sockfd);
+		pthread_t t_recv;
 
-		// close the socket
+		pthread_create(&t_recv, NULL, recv_server, NULL);
+		char send_buff[MAXBUFSIZE];
+		while (1) {
+
+
+			bzero(send_buff, MAXBUFSIZE * sizeof(char));
+
+
+
+			while (1) {
+
+				printf("Command> ");
+				memset(&send_buff, 0, sizeof(send_buff));
+				int bufcur = 0;
+				while (1) {
+					int c = getchar();
+
+					if (c == -1 || c == 0 || c == EOF || c == '\n' || c == '\r') {
+						send_buff[bufcur] = EOF;
+						break;
+					} else {
+						send_buff[bufcur] = c;
+					}
+					bufcur++;
+				}
+
+
+
+				write(sockfd, send_buff, strlen(send_buff) + 1);
+				printf("Str sent: %s\n", send_buff);
+
+				bufcur = 0;
+			}
+
+		}
 		close(sockfd);
+
 	}
 }
