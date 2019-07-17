@@ -24,17 +24,34 @@ fd_set readfds;
 
 char *nick = "";
 
-int sockfd;
+int sockfd, data_writing = 0, data_reading = 0;
 
 void *recv_server()
 {
 	while (1) {
-		char recv_buff[MAXBUFSIZE];
-		bzero(recv_buff, sizeof(recv_buff));
-		read(sockfd, recv_buff, sizeof(recv_buff));
-		//printf("%s\n", recv_buff);
-		FD_ZERO(&readfds);
-		FD_SET(sockfd, &readfds);
+		int activity = select( sockfd + 1 , &readfds , NULL , NULL , NULL);
+
+		if ((activity < 0) && (errno != EINTR)) {
+			printf("select error");
+		}
+
+		if (activity == 0) {
+			continue;
+		}
+
+		if (data_writing == 0 && FD_ISSET(sockfd, &readfds)) {
+			data_reading = 1;
+			char recv_buff[MAXBUFSIZE];
+			bzero(recv_buff, sizeof(recv_buff));
+			printf("reading\n");
+			read(sockfd, recv_buff, sizeof(recv_buff));
+			printf("red.\n");
+			data_reading = 0;
+			printf("%s\n", recv_buff);
+			FD_ZERO(&readfds);
+			FD_SET(sockfd, &readfds);
+
+		}
 	}
 }
 
@@ -97,40 +114,30 @@ int main(int argc, char *argv[])
 
 		pthread_create(&t_recv, NULL, recv_server, NULL);
 		char send_buff[MAXBUFSIZE];
+		memset(send_buff, 0, sizeof send_buff);
+
+		data_writing = 0;
 		while (1) {
 
 
-			bzero(send_buff, MAXBUFSIZE * sizeof(char));
 
-
-
-			while (1) {
-
-				printf("Command> ");
-				memset(&send_buff, 0, sizeof(send_buff));
-				int bufcur = 0;
-				while (1) {
-					int c = getchar();
-
-					if (c == -1 || c == 0 || c == EOF || c == '\n' || c == '\r') {
-						send_buff[bufcur] = EOF;
-						break;
-					} else {
-						send_buff[bufcur] = c;
-					}
-					bufcur++;
-				}
-
-
-
-				write(sockfd, send_buff, strlen(send_buff) + 1);
-				printf("Str sent: %s\n", send_buff);
-
-				bufcur = 0;
+			char buff[MAXBUFSIZE];
+			int n;
+			for (;;) {
+				bzero(buff, sizeof(buff));
+				printf("Enter the string : ");
+				n = 0;
+				while (data_reading == 1) {};
+				while ((buff[n++] = getchar()) != '\n')
+					;
+				data_writing = 1;
+				while (data_reading == 1) {};
+				printf("writing\n");
+				int r = write(sockfd, buff, strlen(buff));
+				printf("wrote %d bytes\n",r);
+				data_writing = 0;
+				bzero(buff, sizeof(buff));
 			}
-
 		}
-		close(sockfd);
-
 	}
 }
