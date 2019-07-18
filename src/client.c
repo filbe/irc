@@ -95,8 +95,10 @@ int main(int argc, char *argv[])
 		if (sockfd == -1) {
 			printf("socket creation failed...\n");
 			exit(0);
-		} else
+		} else {
 			printf("Socket successfully created..\n");
+			printf("Socket fd: %d\n", sockfd);
+		}
 		bzero(&servaddr, sizeof(servaddr));
 
 		// assign IP, PORT
