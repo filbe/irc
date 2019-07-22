@@ -14,142 +14,112 @@
 #include <pthread.h>
 #include <unistd.h>
 
-
-#define FLUSH_STDIN(x) {if(x[strlen(x)-1]!='\n'){do fgets(Junk,16,stdin);while(Junk[strlen(Junk)-1]!='\n');}else x[strlen(x)-1]='\0';}
-char Junk[16];
-
 #define MAXBUFSIZE 65535
-// #define PORT 1234
-#define SA struct sockaddr
 
-fd_set readfds;
+struct servers {
+	char **channels;
+	int socket;
+	struct servers *prev;
+	struct servers *next;
+};
 
-char *nick = "";
+char nick[255];
 
-int sockfd, data_writing = 0, data_reading = 0;
+int current_window_sock = 0;
 
-void *recv_server()
+char *concat(const char *str1, const char *str2)
 {
-	char recv_buff[MAXBUFSIZE];
-
-	while (1) {
-		int activity = select( sockfd , &readfds , NULL , NULL , NULL);
-		printf("RR = %d\n",activity);
-		if (activity > 0) {
-			if (data_writing == 0 && FD_ISSET(sockfd, &readfds)) {
-				data_reading = 1;
-
-				bzero(recv_buff, sizeof(recv_buff));
-				printf("reading\n");
-				read(sockfd, recv_buff, sizeof(recv_buff));
-				printf("red.\n");
-				data_reading = 0;
-				printf("%s\n", recv_buff);
-				FD_ZERO(&readfds);
-				FD_SET(sockfd, &readfds);
-
-			} else {
-				printf("No data avail.\n");
-			}
-			sleep(1);
-		}
-		sleep(1);
-	}
+	int sz = strlen(str1) + strlen(str2) + 1;
+	char *ret = malloc(sz);
+	memset(ret, 0, sz);
+	strcpy(ret, str1);
+	strcat(ret, str2);
+	return ret;
 }
+
+void server_new(int sock)
+{
+	/* TODO: create new instance to servers linked list */
+}
+
+void server_connect(char server[256])
+{
+	/* TODO: server connection */
+	int sock = 0;
+
+	server_new(sock);
+	current_window_sock = sock;
+}
+
+void server_send(int sock, char *cmd)
+{
+	/* TODO: send stuff to server */
+}
+
+void all_servers_send()
+{
+	/* TODO: send stuff to all servers */
+}
+
+void server_disconnect(int sock)
+{
+	/* TODO: send disconnect signal to server and close connection */
+}
+
+
+
+void nick_set(char *n)
+{
+	strcpy(nick, n);
+	all_servers_send(concat("/nick ", nick));
+}
+
+
+char *last_command = NULL;
+void command_get(char *cmd)
+{
+
+	/* TODO: get command to cmd from user input */
+	
+	strcpy(cmd, "komento");
+	sleep(1);
+}
+
+int command_parse(char *cmd)
+{
+
+	char *command = malloc(strlen(cmd)+1);
+	char *parameter = malloc(strlen(cmd)+1);
+	strcpy(command, cmd);
+	/* TODO: parse /[command] [parameter] OR [msg] and then handle it properly */
+
+
+	if (strcmp(command, "msg") == 0 ||
+	        strcmp(command, "nick") == 0 ||
+	        strcmp(command, "join") == 0 ||
+	        strcmp(command, "whois") == 0 ||
+	        strcmp(command, "") == 0) {
+		/* forward to server as is */
+		server_send(current_window_sock, cmd);
+		return 0;
+	} else if (strcmp(command, "connect") == 0) {
+		server_connect(parameter);
+
+		return 0;
+	}
+
+	return 1; /* command failed */
+}
+
 
 int main(int argc, char *argv[])
 {
-	int sockfd;
-	struct sockaddr_in servaddr;
-	char *argument = "";
-	int port = 0;
-
-	char channels[40];
-
-	for (int i = 1; i < argc; i++) {
-		asprintf(&argument, "%s", argv[i]);
-		if (strcmp(argument, "-p") == 0 || strcmp(argument, "--port") == 0) {
-			free(argument);
-			asprintf(&argument, "%s", argv[++i]);
-			port = atoi(argument);
-			printf("port: %d\n", port);
-		} else if (strcmp(argument, "-n") == 0 || strcmp(argument, "--nick") == 0) {
-			free(argument);
-			asprintf(&argument, "%s", argv[++i]);
-			nick = argument;
-			printf("nickname: %s\n", nick);
-		} else if (strcmp(argument, "-c") == 0 || strcmp(argument, "--channels") == 0) {
-			free(argument);
-			asprintf(&argument, "%s", argv[++i]);
-			channels[i - 1] = *argument;
-			printf("port: %s\n", channels);
-		} else if (strcmp(argument, "-p") != 0 || strcmp(argument, "--port") != 0 || strcmp(argument, "-n") != 0 || strcmp(argument, "--nick") != 0
-		           || strcmp(argument, "-c") != 0 || strcmp(argument, "-channel") != 0) {
-			printf("Invalid command line argument(s)!\n");
-			free(argument);
-			return 0;
-		}
-
-		// socket create and varification
-		sockfd = socket(AF_INET, SOCK_STREAM, 0);
-		if (sockfd == -1) {
-			printf("socket creation failed...\n");
-			exit(0);
-		} else
-			printf("Socket successfully created..\n");
-		bzero(&servaddr, sizeof(servaddr));
-
-		// assign IP, PORT
-		servaddr.sin_family = AF_INET;
-		servaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
-		servaddr.sin_port = htons(port);
-
-		// connect the client socket to server socket
-		if (connect(sockfd, (SA*)&servaddr, sizeof(servaddr)) != 0) {
-			printf("connection with the server failed...\n");
-			exit(0);
-		} else {
-			printf("connected to the server..\n");
-		}
-
-		pthread_t t_recv;
-
-
-		FD_ZERO(&readfds);
-		FD_SET(sockfd, &readfds);
-
-
-		pthread_create(&t_recv, NULL, recv_server, NULL);
-		char send_buff[MAXBUFSIZE];
-		memset(send_buff, 0, sizeof send_buff);
-
-		data_writing = 0;
-		while (1) {
-
-
-
-			char buff[MAXBUFSIZE];
-			int n;
-			for (;;) {
-				bzero(buff, sizeof(buff));
-				printf("Enter the string : ");
-				n = 0;
-				while (data_reading == 1) {};
-				while ((buff[n++] = getchar()) != '\n')
-					;
-				data_writing = 1;
-				while (data_reading == 1) {};
-				printf("writing\n");
-				int r = write(sockfd, buff, strlen(buff));
-				char buf[1024];
-				read(sockfd, buf, 1024);
-				printf("%s\n", buf);
-				FD_ZERO(&readfds);
-				FD_SET(sockfd, &readfds);
-				printf("wrote %d bytes\n", r);
-				data_writing = 0;
-				bzero(buff, sizeof(buff));
-			}
+	last_command = malloc(10);
+	strcpy(last_command, "/ripuli");
+	while (1) {
+		command_get(last_command);
+		if (command_parse(last_command)) {
+			printf("Command failed, invalid command! '%s'\n", last_command);
 		}
 	}
 }
