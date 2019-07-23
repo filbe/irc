@@ -75,51 +75,72 @@ void nick_set(char *n)
 }
 
 
-char *last_command = NULL;
+char last_command[65535];
 void command_get(char *cmd)
 {
-
-	/* TODO: get command to cmd from user input */
-	
-	strcpy(cmd, "komento");
-	sleep(1);
+	char str[65535];
+	int i = 0;
+	char c;
+	printf("%s> ", nick);
+	do {
+		c = getchar();
+		if (c == '\n') {
+			str[i++] = 0;
+			break;
+		}
+		str[i++] = c;
+	} while (1);
+	strcpy(cmd, str);
+	strcpy(last_command, cmd);
 }
 
 int command_parse(char *cmd)
 {
-
-	char *command = malloc(strlen(cmd)+1);
-	char *parameter = malloc(strlen(cmd)+1);
-	strcpy(command, cmd);
+	char token[65535];
+	char command[65535];
+	char parameter[65535];
 	/* TODO: parse /[command] [parameter] OR [msg] and then handle it properly */
+	if (cmd[0] == '/') {
+		strcpy(token, strtok(cmd, " "));
+		strcpy(command, token);
+		printf("%s\n", token );
+		char *t = strtok(NULL, "\0");
+		if (t == NULL) {
+			return 1;
+		}
+		strcpy(parameter, t);
+		printf("command: %s\nparameter: %s\n", command, parameter);
 
-
-	if (strcmp(command, "msg") == 0 ||
-	        strcmp(command, "nick") == 0 ||
-	        strcmp(command, "join") == 0 ||
-	        strcmp(command, "whois") == 0 ||
-	        strcmp(command, "") == 0) {
-		/* forward to server as is */
+		if (strcmp(command, "/msg") == 0 ||
+		        strcmp(command, "/nick") == 0 ||
+		        strcmp(command, "/join") == 0 ||
+		        strcmp(command, "/whois") == 0) {
+			/* forward to server as is */
+			server_send(current_window_sock, cmd);
+			if (strcmp(command, "/nick") == 0) {
+				strcpy(nick, strtok(parameter, " "));
+			}
+			return 0;
+		} else if (strcmp(command, "/connect") == 0) {
+			server_connect(parameter);
+			return 0;
+		} else {
+			return 1;
+		}
+	} else {
 		server_send(current_window_sock, cmd);
 		return 0;
-	} else if (strcmp(command, "connect") == 0) {
-		server_connect(parameter);
-
-		return 0;
 	}
-
 	return 1; /* command failed */
 }
 
 
 int main(int argc, char *argv[])
 {
-	last_command = malloc(10);
-	strcpy(last_command, "/ripuli");
 	while (1) {
 		command_get(last_command);
 		if (command_parse(last_command)) {
-			printf("Command failed, invalid command! '%s'\n", last_command);
+			printf("Command failed, invalid command or missing parameters! '%s'\n", last_command);
 		}
 	}
 }
