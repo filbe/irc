@@ -28,6 +28,16 @@ char nick[255];
 
 int current_window_sock = 0;
 
+// const char *c = "";
+// int strlen(char *c) {
+// 	int counter = 0;
+// 	while(c[counter] != 0) {
+// 		counter++;
+// 	}
+// 	return counter;
+// }
+
+
 char *concat(const char *str1, const char *str2)
 {
 	int sz = strlen(str1) + strlen(str2) + 1;
@@ -58,8 +68,11 @@ void server_connect(char server[256])
 	}
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_port = htons(portno);
-	if (connect(sockfd,&serv_addr,sizeof(serv_addr)) < 0) 
-        printf("ERROR connecting");
+	if (connect(sockfd, &serv_addr, sizeof(serv_addr)) < 0) {
+		printf("ERROR connecting");
+	} else {
+		printf("socket: %d\n", sockfd);
+	}
 
 
 	// int sock = 0;
@@ -113,6 +126,7 @@ void command_get(char *cmd)
 
 int command_parse(char *cmd)
 {
+	printf("%s", cmd);
 	char token[65535];
 	char command[65535];
 	char parameter[65535];
