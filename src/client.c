@@ -5,6 +5,7 @@
 #include <sys/socket.h>
 #include <sys/select.h>
 #include <sys/time.h>
+#include <sys/types.h>
 #include <stdlib.h>
 #include <netinet/in.h>
 #include <string.h>
@@ -45,10 +46,26 @@ void server_new(int sock)
 void server_connect(char server[256])
 {
 	/* TODO: server connection */
-	int sock = 0;
+	int portno = 0;
+	int sockfd = 0;
+	struct sockaddr_in serv_addr;
 
-	server_new(sock);
-	current_window_sock = sock;
+	serv_addr.sin_addr.s_addr = INADDR_ANY;
+	portno = atoi(server);
+	sockfd = socket(AF_INET, SOCK_STREAM, 0);
+	if (sockfd < 0) {
+		printf("ERROR opening socket");
+	}
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_port = htons(portno);
+	if (connect(sockfd,&serv_addr,sizeof(serv_addr)) < 0) 
+        printf("ERROR connecting");
+
+
+	// int sock = 0;
+
+	// server_new(sock);
+	// current_window_sock = sock;
 }
 
 void server_send(int sock, char *cmd)
@@ -99,7 +116,6 @@ int command_parse(char *cmd)
 	char token[65535];
 	char command[65535];
 	char parameter[65535];
-	/* TODO: parse /[command] [parameter] OR [msg] and then handle it properly */
 	if (cmd[0] == '/') {
 		strcpy(token, strtok(cmd, " "));
 		strcpy(command, token);
@@ -109,7 +125,7 @@ int command_parse(char *cmd)
 			return 1;
 		}
 		strcpy(parameter, t);
-		printf("command: %s\nparameter: %s\n", command, parameter);
+		printf("command: %s\nparameter: %s\n", command, parameter);  //TODO remove in cleanup
 
 		if (strcmp(command, "/msg") == 0 ||
 		        strcmp(command, "/nick") == 0 ||
@@ -138,9 +154,11 @@ int command_parse(char *cmd)
 int main(int argc, char *argv[])
 {
 	while (1) {
+		server_connect(argv[1]);
 		command_get(last_command);
 		if (command_parse(last_command)) {
 			printf("Command failed, invalid command or missing parameters! '%s'\n", last_command);
 		}
+
 	}
 }
