@@ -7,27 +7,6 @@
 #include <string.h>
 #include <time.h>
 #include <errno.h>
-/*
-
-Serverillä pidetään kirjaa irc-kanavien käyttäjistä ja niihin liittyvästä socketeista.
-Serverillä on lisäksi pääsocket (recv_socket), jolla vastaanotetaan uusien käyttäjien saapuvat socketit.
-
-TODO:
-Tällä hetkellä socketin lukeminen jää odottamaan dataa niin pitkäksi aikaa kunnes dataa on saatavilla.
-- muuta ohjelmaa siten, että socketin statuksen voi tarkastaa ilman, että jäädään odottamaan dataa
-	- tämä mahdollistaa useiden sockettien statuksen tutkimisen peräkkäin ilman, että jokaisesta on saatavilla dataa heti
-
-- muuta ohjelmaa siten, että uudelta käyttäjältä vaaditaan ensimmäisessä viestissä käyttäjätunnus jossakin formaatissa.
-	- tarkastetaan, että käyttäjätunnus on vapaana. Jos ei ole, hylätään yhteydenottopyyntö
-	asianmukaisella virhesanomalla (käyttäjätunnus varattu / käyttäjätunnusta ei annettu oikeassa formaatissa)
-	- jos käyttäjätunnus on vapaana, luodaan uusi käyttäjä kyseisellä nickillä ja liitetään socket siihen
-
-- käydään läpi kaikki tallennetut socketit ja tarkastetaan, onko niihin tullut dataa
-
-- parsitaan käyttäjän lähettämä data (toteutetaan komennot ja viestittelymahdollisuus)
-
-*/
-
 
 
 struct users {
@@ -63,6 +42,11 @@ void adduser(char *nick, int socket)
 		last_user->next = new_user;
 		last_user = new_user;
 	}
+}
+
+struct users *user_find_by_socket(int socket) {
+	/* TODO: return a valid user or NULL */
+	return NULL;
 }
 
 void removeuser(char *nick)
@@ -136,13 +120,9 @@ void clear_users()
 
 }
 
-
-
 void init_connection(int port)
 {
-
 	opt = 1;
-	
 	memset(&buffer, 0, sizeof(buffer));
 
 	// Creating socket file descriptor
@@ -170,11 +150,6 @@ void init_connection(int port)
 		exit(EXIT_FAILURE);
 	}
 	addrlen = sizeof(address);
-	
-
-	// Add a descriptor to an fd_set
-	
-
 }
 
 void send_everyone_but(char *nick, char *send_string)
@@ -182,103 +157,89 @@ void send_everyone_but(char *nick, char *send_string)
 	struct users *cur_u;
 	cur_u = all_users;
 	while (cur_u->nick) {
-		//if (strcmp(cur_u->nick, nick) != 0) {
 			char tosend[65535];
 			strcat(tosend, nick);
 			strcat(tosend, "> ");
 			strcat(tosend, send_string);
 			strcat(tosend, "\n");
 			send(cur_u->socket ,  tosend, strlen(tosend) , 0);
-		//}
 		cur_u = cur_u->next;
 	}
 }
 
+int connections_handle(int sock) {
+	char *nick = NULL;
+	char *msg_from_sock = NULL;
+	struct users *u = user_find_by_socket(sock);
+	if (u != NULL) {
+		// user found!
 
-void receive_sync(char ** received_msg)
-{
-	FD_ZERO(&readfds);
-	FD_SET(server_fd, &readfds);
-	max_sd = server_fd;
+		/*
+		TODO:
 
-	struct users *cur_u;
-	cur_u = all_users;
-	while (cur_u->nick) {
-		FD_SET(cur_u->socket, &readfds);
-		max_sd = max_sd > cur_u->socket ? max_sd : cur_u->socket;
-		cur_u = cur_u->next;
-	}
+		handle all commands that could be done.
 
-	char * welcome = "Welcome to the server, \033[1m%s\033[0m!\nUsers in the server: %s\n";
-	char *welcomenick;
-	char *invalid_nick = "\033[01;33mMessage from the server: \033[1;31mERROR! Please reconnect with \033[0m\033[1m/nick <nick>\033[0m\n";
+		copy message from socket to msg_from_sock
 
-	printf("waiting for activity...\n");
-	int activity = select( max_sd + 1 , &readfds , NULL , NULL , NULL);
-	printf("some activity received!\n");
 
-	if ((activity < 0) && (errno != EINTR)) {
-		printf("select error");
-	}
+		*/
+		send_everyone_but(u->nick, msg_from_sock);
 
-	if (activity == 0) {
-		return;
-	}
-
-	printf("checking master sock\n");
-	if (FD_ISSET(server_fd, &readfds)) {
-		printf("something in master sock, accepting incoming sock...\n");
-		if ((new_socket = accept(server_fd,
-		                         (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {
-			perror("accept");
-			exit(EXIT_FAILURE);
-		}
-		printf("new sock from master sock accepted, reading shit...\n");
-		valread = read( new_socket , buffer, 1024);
-		printf("read ok\n");
-		char *space = " ";
-		char *linebreak = "\n";
-		char *word = strtok(buffer, space);
-		if (strcmp(word, "/nick") == 0) {
-			word = strtok(NULL, space);
-			word = strtok(word, linebreak);
-			adduser(word, new_socket);
-			printf("\033[1;32mNick \033[0m\033[1m%s\033[0m \033[1;32mconnected. Socket: \033[0m\033[1m%d\033[0m\n", word, new_socket);
-			char u_str[4096];
-			listusers_string(u_str);
-			asprintf(&welcomenick, welcome, word, u_str);
-			send(new_socket ,  welcomenick, strlen(welcomenick) , 0);
-		} else {
-			printf("\033[01;33mSomeone tried to connect without telling nick. Warned them about it.\n\033[0m");
-			send(new_socket ,  invalid_nick, strlen(invalid_nick) , 0);
-		}
-		return;
 	} else {
-		printf("existing sock...\n");
-		struct users *cur_u;
-		cur_u = all_users;
-		while (cur_u->nick) {
-			if (FD_ISSET(cur_u->socket, &readfds)) {
-				printf("reading...\n");
-				if ((valread = read(cur_u->socket, buffer, 1024)) == 0) {
-					printf("%s disconnected!\n", cur_u->nick);
-					close(cur_u->socket);
-					removeuser(cur_u->nick);
-				} else {
-					char *linebreak = "\n";
-					char *msg = strtok(buffer, linebreak);
-
-					printf("MSG from %s: %s\n", cur_u->nick, msg);
-					send_everyone_but(cur_u->nick, msg);
-					return;
-				}
-
-			}
-			cur_u = cur_u->next;
-		}
-		printf("existing sock operations completed\n");
+		// user not found, create one!
+		/* TODO: 
+		check if we have /nick [nick] coming
+			- create user
+			*/
+			adduser(nick, sock);
+			/*
+		if not, then
+			- send error message to client: "no nick set!" and disconnect
+			- return 0;
+		*/
 	}
+	return 0;
+}
 
+int connections_incoming_handle() {
+	int new_socket = 0;
+	int r = 0;
+	/* TODO:
+	
+	check if we have something in incoming sock
+		- new connection?
+			new_socket = (get new socket)
+			*/
+			r |= connections_handle(new_socket);
+			/*
+		- other situations
+			print some debug data. how to detect connection close or other exceptions?
+
+	*/
+	return r;
+}
+
+int connections_active_handle() {
+	int r = 0;
+	/* TODO:
+	
+	loop for all users
+		if (something in incoming conn sock) {
+			r |= connections_handle(user->sock);
+		}
+
+	*/
+	return r;
+}
+
+void receive_sync()
+{
+	if (connections_incoming_handle()) {
+		printf("connections_incoming_handle failed!\n");
+	}
+	if (connections_active_handle()) {
+		printf("connections_active_handle failed!\n");
+	}
 }
 
 int main()
@@ -288,9 +249,8 @@ int main()
 	init_users();
 	init_connection(port);
 
-	char **received_msg = NULL;
 	while (1) {
-		receive_sync(received_msg);
+		receive_sync();
 	}
 
 	clear_users();
