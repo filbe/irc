@@ -87,12 +87,22 @@ int server_send(int sock, char *cmd)
 	}
 	/* TODO: send stuff to server */
 	write(sock, cmd, strlen(cmd));
+	printf("TO server: %s\n", cmd);
 	return 0;
 }
 
 void all_servers_send()
 {
 	/* TODO: send stuff to all servers */
+}
+
+
+char *server_read(int sock)
+{
+	char *r = malloc(65535);
+	memset(r, 0, 65535);
+	read(sock, r, 65535);
+	return r;
 }
 
 void server_disconnect(int sock)
@@ -131,11 +141,14 @@ void command_get(char *cmd)
 
 int command_parse(char *cmd)
 {
+	printf("Command parse: %s\n");
 	char token[65535];
 	char command[65535];
 	char parameter[65535];
+	char cmd_[65535];
+	strcpy(cmd_, cmd);
 	if (cmd[0] == '/') {
-		strcpy(token, strtok(cmd, " "));
+		strcpy(token, strtok(cmd_, " "));
 		strcpy(command, token);
 		char *t = strtok(NULL, "\0");
 		if (t == NULL) {
@@ -172,6 +185,11 @@ int main(int argc, char *argv[])
 		command_get(last_command);
 		if (command_parse(last_command)) {
 			printf("Command failed, invalid command or missing parameters! '%s'\n", last_command);
+		}
+		if (nick != NULL && strlen(nick)) {
+			char *p = server_read(current_window_sock);
+			printf("From server: %s\n",p);
+			free(p);
 		}
 
 	}
