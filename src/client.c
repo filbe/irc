@@ -26,7 +26,7 @@ struct servers {
 
 char nick[255];
 
-int current_window_sock = 0;
+int current_window_sock = -1;
 
 // const char *c = "";
 // int strlen(char *c) {
@@ -79,10 +79,15 @@ void server_connect(char server[256])
 	// current_window_sock = sock;
 }
 
-void server_send(int sock, char *cmd)
+int server_send(int sock, char *cmd)
 {
+	if (sock < 3) {
+		printf("Socket unset!\n");
+		return 1;
+	}
 	/* TODO: send stuff to server */
 	write(sock, cmd, strlen(cmd));
+	return 0;
 }
 
 void all_servers_send()
@@ -111,7 +116,7 @@ void command_get(char *cmd)
 	char str[65535] = {0};
 	int i = 0;
 	char c;
-	printf("\r%s> ", nick);
+	printf("%s> ", nick);
 	do {
 		c = getchar();
 		if (c == '\n' || c == 0 || c == EOF) {
