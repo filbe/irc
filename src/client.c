@@ -141,11 +141,10 @@ void command_get(char *cmd)
 
 int command_parse(char *cmd)
 {
-	printf("Command parse: %s\n");
-	char token[65535];
-	char command[65535];
-	char parameter[65535];
-	char cmd_[65535];
+	char token[65535] = {0};
+	char command[65535] = {0};
+	char parameter[65535] = {0};
+	char cmd_[65535] = {0};
 	strcpy(cmd_, cmd);
 	if (cmd[0] == '/') {
 		strcpy(token, strtok(cmd_, " "));
@@ -182,13 +181,14 @@ int command_parse(char *cmd)
 int main(int argc, char *argv[])
 {
 	while (1) {
+		memset(last_command, 0, sizeof(last_command));
 		command_get(last_command);
 		if (command_parse(last_command)) {
 			printf("Command failed, invalid command or missing parameters! '%s'\n", last_command);
 		}
 		if (nick != NULL && strlen(nick)) {
 			char *p = server_read(current_window_sock);
-			printf("From server: %s\n",p);
+			printf("From server: %s\n", p);
 			free(p);
 		}
 
