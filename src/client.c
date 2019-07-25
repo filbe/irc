@@ -56,22 +56,20 @@ void server_new(int sock)
 void server_connect(char server[256])
 {
 	/* TODO: server connection */
-	int portno = 0;
-	int sockfd = 0;
 	struct sockaddr_in serv_addr;
 
 	serv_addr.sin_addr.s_addr = INADDR_ANY;
-	portno = atoi(server);
-	sockfd = socket(AF_INET, SOCK_STREAM, 0);
-	if (sockfd < 0) {
+	int portno = atoi(server);
+	current_window_sock = socket(AF_INET, SOCK_STREAM, 0);
+	if (current_window_sock < 0) {
 		printf("ERROR opening socket");
 	}
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_port = htons(portno);
-	if (connect(sockfd, &serv_addr, sizeof(serv_addr)) < 0) {
+	if (connect(current_window_sock, &serv_addr, sizeof(serv_addr)) < 0) {
 		printf("ERROR connecting");
 	} else {
-		printf("socket: %d\n", sockfd);
+		printf("socket: %d\n", current_window_sock);
 	}
 
 
@@ -84,6 +82,7 @@ void server_connect(char server[256])
 void server_send(int sock, char *cmd)
 {
 	/* TODO: send stuff to server */
+	write(sock, cmd, strlen(cmd));
 }
 
 void all_servers_send()
@@ -100,6 +99,7 @@ void server_disconnect(int sock)
 
 void nick_set(char *n)
 {
+	printf("nick_set(): %s\n", n);
 	strcpy(nick, n);
 	all_servers_send(concat("/nick ", nick));
 }
@@ -108,39 +108,35 @@ void nick_set(char *n)
 char last_command[65535];
 void command_get(char *cmd)
 {
-	char str[65535];
+	char str[65535] = {0};
 	int i = 0;
 	char c;
-	printf("%s> ", nick);
+	printf("\r%s> ", nick);
 	do {
 		c = getchar();
-		if (c == '\n') {
+		if (c == '\n' || c == 0 || c == EOF) {
 			str[i++] = 0;
 			break;
 		}
 		str[i++] = c;
 	} while (1);
 	strcpy(cmd, str);
-	strcpy(last_command, cmd);
+	// strcpy(last_command, cmd);
 }
 
 int command_parse(char *cmd)
 {
-	printf("%s", cmd);
 	char token[65535];
 	char command[65535];
 	char parameter[65535];
 	if (cmd[0] == '/') {
 		strcpy(token, strtok(cmd, " "));
 		strcpy(command, token);
-		printf("%s\n", token );
 		char *t = strtok(NULL, "\0");
 		if (t == NULL) {
 			return 1;
 		}
 		strcpy(parameter, t);
-		printf("command: %s\nparameter: %s\n", command, parameter);  //TODO remove in cleanup
-
 		if (strcmp(command, "/msg") == 0 ||
 		        strcmp(command, "/nick") == 0 ||
 		        strcmp(command, "/join") == 0 ||
@@ -148,7 +144,7 @@ int command_parse(char *cmd)
 			/* forward to server as is */
 			server_send(current_window_sock, cmd);
 			if (strcmp(command, "/nick") == 0) {
-				strcpy(nick, strtok(parameter, " "));
+				nick_set(strtok(parameter, " "));
 			}
 			return 0;
 		} else if (strcmp(command, "/connect") == 0) {
@@ -168,7 +164,6 @@ int command_parse(char *cmd)
 int main(int argc, char *argv[])
 {
 	while (1) {
-		server_connect(argv[1]);
 		command_get(last_command);
 		if (command_parse(last_command)) {
 			printf("Command failed, invalid command or missing parameters! '%s'\n", last_command);
