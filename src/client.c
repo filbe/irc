@@ -1,5 +1,6 @@
 #define _GNU_SOURCE
 #include <unistd.h>
+#include <pwd.h>
 #include <stdio.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
@@ -70,7 +71,16 @@ void server_connect(char server[256])
 		printf("ERROR connecting");
 	} else {
 		printf("socket: %d\n", current_window_sock);
-		server_send(current_window_sock, "/nick joku");
+		char *connect_msg;
+		char *nick_;
+		asprintf(&nick_,"%s",getpwuid(getuid())->pw_name);
+		strcpy(nick, nick_);
+		if (asprintf(&connect_msg, "/nick %s", nick)) {
+
+		}
+
+		server_send(current_window_sock, connect_msg);
+		free(connect_msg);
 	}
 
 
@@ -88,7 +98,7 @@ int server_send(int sock, char *cmd)
 	}
 	/* TODO: send stuff to server */
 	write(sock, cmd, strlen(cmd));
-	printf("TO server: %s\n", cmd);
+	printf("TO server: '%s'\n", cmd);
 	return 0;
 }
 
@@ -181,6 +191,8 @@ int command_parse(char *cmd)
 
 int main(int argc, char *argv[])
 {
+	getlogin_r(nick, sizeof(nick));
+
 	while (1) {
 		memset(last_command, 0, sizeof(last_command));
 		command_get(last_command);
