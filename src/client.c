@@ -36,7 +36,7 @@ int current_window_sock = -1;
 // 	}
 // 	return counter;
 // }
-
+int server_send(int sock, char *cmd);
 
 char *concat(const char *str1, const char *str2)
 {
@@ -70,6 +70,7 @@ void server_connect(char server[256])
 		printf("ERROR connecting");
 	} else {
 		printf("socket: %d\n", current_window_sock);
+		server_send(current_window_sock, "/nick joku");
 	}
 
 

@@ -28,8 +28,15 @@ int addrlen;
 char buffer[1024];
 fd_set readfds;
 
-void adduser(char *nick, int socket)
+int adduser(char *nick, int socket)
 {
+	if (nick == NULL) {
+		printf("no username specified, adduser() failed\n");
+		return 1;
+	} else {
+		printf("adding user %s\n", nick);
+	}
+
 	max_sd = max_sd > socket ? max_sd : socket;
 	if (strcmp(last_user->nick, "") == 0) {
 		strcpy(last_user->nick, nick);
@@ -42,9 +49,11 @@ void adduser(char *nick, int socket)
 		last_user->next = new_user;
 		last_user = new_user;
 	}
+	return 0;
 }
 
-struct users *user_find_by_socket(int socket) {
+struct users *user_find_by_socket(int socket)
+{
 	struct users *cur_u;
 	cur_u = all_users;
 	while (cur_u->nick) {
@@ -129,6 +138,7 @@ void clear_users()
 
 void init_connection(int port)
 {
+	FD_ZERO(&readfds);
 	opt = 1;
 	memset(&buffer, 0, sizeof(buffer));
 
@@ -157,6 +167,8 @@ void init_connection(int port)
 		exit(EXIT_FAILURE);
 	}
 	addrlen = sizeof(address);
+	FD_SET(server_fd, &readfds);
+	max_sd = max_sd > server_fd ? max_sd : server_fd;
 }
 
 void send_everyone_but(char *nick, char *send_string)
@@ -164,22 +176,24 @@ void send_everyone_but(char *nick, char *send_string)
 	struct users *cur_u;
 	cur_u = all_users;
 	while (cur_u->nick) {
-			char tosend[65535];
-			strcat(tosend, nick);
-			strcat(tosend, "> ");
-			strcat(tosend, send_string);
-			strcat(tosend, "\n");
-			send(cur_u->socket ,  tosend, strlen(tosend) , 0);
+		char tosend[65535];
+		strcat(tosend, nick);
+		strcat(tosend, "> ");
+		strcat(tosend, send_string);
+		strcat(tosend, "\n");
+		send(cur_u->socket ,  tosend, strlen(tosend) , 0);
 		cur_u = cur_u->next;
 	}
 }
 
-int connections_handle(int sock) {
+int connections_handle(int sock)
+{
 	char *nick = NULL;
 	char *msg_from_sock = NULL;
+	char *msg_to_client = NULL;
 	struct users *u = user_find_by_socket(sock);
 	if (u != NULL) {
-		// user found!
+		printf("user %s found!\n", u->nick);
 
 		/*
 		TODO:
@@ -193,45 +207,122 @@ int connections_handle(int sock) {
 		send_everyone_but(u->nick, msg_from_sock);
 
 	} else {
-		// user not found, create one!
-		/* TODO: 
-		check if we have /nick [nick] coming
-			- create user
-			*/
-			adduser(nick, sock);
-			/*
-		if not, then
-			- send error message to client: "no nick set!" and disconnect
-			- return 0;
-		*/
+		printf("user not found from socket %d\n", sock);
+		msg_from_sock = malloc(65535);
+		memset(msg_from_sock, 0, 65535);
+		read(sock, msg_from_sock, 65535);
+		char token[65535] = {0};
+		char command[65535] = {0};
+		char parameter[65535] = {0};
+		char cmd_[65535] = {0};
+		int r;
+		strcpy(cmd_, msg_from_sock);
+
+		if (msg_from_sock[0] == '/') {
+			strcpy(token, strtok(cmd_, " "));
+			strcpy(command, token);
+			char *t = strtok(NULL, "\0");
+			if (t == NULL) {
+				r = asprintf(&msg_to_client, "unknown error t == NULL");
+				write(sock, msg_to_client, strlen(msg_to_client));
+				free(msg_to_client);
+				free(msg_from_sock);
+				return 0;
+			}
+			strcpy(parameter, t);
+			if (strcmp(command, "/nick") == 0) {
+				/* forward to server as is */
+				const char *welcome_msg = "Welcome to the most awesome irc ever, %s!";
+				r =asprintf(&msg_to_client, welcome_msg, parameter);
+				write(sock, msg_to_client, strlen(msg_to_client));
+
+				nick = malloc(65535);
+				memset(nick, 0, 65535);
+				strcpy(nick, parameter);
+				adduser(nick, sock);
+				free(msg_to_client);
+				free(msg_from_sock);
+				free(nick);
+				return 0;
+			} else {
+				r = asprintf(&msg_to_client, "please specify a nick name first! /nick <param>");
+				write(sock, msg_to_client, strlen(msg_to_client));
+				free(msg_to_client);
+				free(msg_from_sock);
+				return 0;
+			}
+		} else {
+			r = asprintf(&msg_to_client, "please specify a nick name /nick <param>");
+			write(sock, msg_to_client, strlen(msg_to_client));
+			free(msg_to_client);
+			free(msg_from_sock);
+			return 0;
+		}
+
+		if (r == -666){
+			printf("plää plää nyt meni pieleen");
+		}
 	}
 	return 0;
 }
 
-int connections_incoming_handle() {
+int connections_incoming_handle()
+{
 	int r = 0;
-	/* TODO:
-	
-	check if we have something in incoming sock (check server_fd status)
-		- new connection?
-			new_socket = (get new socket)
-			*/
-			r |= connections_handle(new_socket);
-			/*
-		- other situations
-			print some debug data. how to detect connection close or other exceptions?
+	struct timeval timeout;
+	timeout.tv_sec = 1;
+	timeout.tv_usec = 0;
 
-	*/
-	return r;
+	printf("checking activity\n");
+	FD_ZERO(&readfds);
+	FD_SET(server_fd, &readfds);
+	int activity = select( max_sd + 1 , &readfds , NULL , NULL , &timeout);
+	printf("activity: %d\n", activity);
+
+	if ((activity < 0) && (errno != EINTR)) {
+		printf("select error\n");
+		return 1;
+	}
+	if (activity == 0) {
+		return 0;
+	}
+	if (FD_ISSET(server_fd, &readfds)) {
+		printf("incoming!\n");
+		if ((new_socket = accept(server_fd,
+		                         (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {
+			perror("accept");
+			exit(EXIT_FAILURE);
+		}
+
+
+
+		/* TODO:
+
+		check if we have something in incoming sock (check server_fd status)
+			- new connection?
+				new_socket = (get new socket)
+				*/
+		r |= connections_handle(new_socket);
+		FD_SET(new_socket, &readfds);
+		max_sd = max_sd > new_socket ? max_sd : new_socket;
+		/*
+		- other situations
+		print some debug data. how to detect connection close or other exceptions?
+
+		*/
+		return r;
+	}
+	return 0;
 }
 
-int connections_active_handle() {
+int connections_active_handle()
+{
 	int r = 0;
 	struct users *cur_u;
 	cur_u = all_users;
 	while (cur_u->nick) {
 		if (0 /* check if something is coming from cur_u->socket */) {
-			r |= connections_handle(cur_u->sock);
+			r |= connections_handle(cur_u->socket);
 		}
 		cur_u = cur_u->next;
 	}
@@ -243,6 +334,7 @@ void receive_sync()
 	if (connections_incoming_handle()) {
 		printf("connections_incoming_handle failed!\n");
 	}
+	return;
 	if (connections_active_handle()) {
 		printf("connections_active_handle failed!\n");
 	}
