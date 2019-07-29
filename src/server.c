@@ -21,12 +21,12 @@ struct users *last_user;
 
 int recv_socket = -1;
 
-int server_fd, new_socket, valread, max_sd;
+int server_fd, new_socket, valread, max_sd, max_client_sd;
 struct sockaddr_in address;
 int opt;
 int addrlen;
 char buffer[1024];
-fd_set readfds;
+fd_set readfds, clientfds;
 
 int adduser(char *nick, int socket)
 {
@@ -192,6 +192,9 @@ int connections_handle(int sock)
 	char *msg_from_sock = NULL;
 	char *msg_to_client = NULL;
 	struct users *u = user_find_by_socket(sock);
+	msg_from_sock = malloc(65535);
+	memset(msg_from_sock, 0, 65535);
+	read(sock, msg_from_sock, 65535);
 	if (u != NULL) {
 		printf("user %s found!\n", u->nick);
 
@@ -208,9 +211,7 @@ int connections_handle(int sock)
 
 	} else {
 		printf("user not found from socket %d\n", sock);
-		msg_from_sock = malloc(65535);
-		memset(msg_from_sock, 0, 65535);
-		read(sock, msg_from_sock, 65535);
+
 		char token[65535] = {0};
 		char command[65535] = {0};
 		char parameter[65535] = {0};
@@ -233,7 +234,7 @@ int connections_handle(int sock)
 			if (strcmp(command, "/nick") == 0) {
 				/* forward to server as is */
 				const char *welcome_msg = "Welcome to the most awesome irc ever, %s!";
-				r =asprintf(&msg_to_client, welcome_msg, parameter);
+				r = asprintf(&msg_to_client, welcome_msg, parameter);
 				write(sock, msg_to_client, strlen(msg_to_client));
 
 				nick = malloc(65535);
@@ -259,7 +260,7 @@ int connections_handle(int sock)
 			return 0;
 		}
 
-		if (r == -666){
+		if (r == -666) {
 			printf("plää plää nyt meni pieleen");
 		}
 	}
@@ -317,11 +318,34 @@ int connections_incoming_handle()
 
 int connections_active_handle()
 {
+	printf("active handle()\n");
+	struct timeval timeout;
+	timeout.tv_sec = 1;
+	timeout.tv_usec = 0;
+	FD_ZERO(&clientfds);
 	int r = 0;
 	struct users *cur_u;
 	cur_u = all_users;
-	while (cur_u->nick) {
-		if (0 /* check if something is coming from cur_u->socket */) {
+	while (cur_u->nick && cur_u->nick != NULL && strcmp(cur_u->nick, "") != 0) {
+		printf("nick found: '%s'\n", cur_u->nick);
+		FD_SET(cur_u->socket, &clientfds);
+		max_client_sd = max_client_sd > cur_u->socket ? max_client_sd : cur_u->socket;
+		cur_u = cur_u->next;
+	}
+	printf("ennen selectiä\n");
+	int activity = select( max_client_sd + 1 , &clientfds , NULL , NULL , &timeout);
+	if ((activity < 0) && (errno != EINTR)) {
+		printf("select error\n");
+		return 1;
+	}
+	if (activity == 0) {
+		printf("joku printti\n");
+		return 0;
+	}
+	cur_u = all_users;
+	while (cur_u->nick && strcmp(cur_u->nick, "") != 0) {
+		printf("checking nick %s\n", cur_u->nick);
+		if (FD_ISSET(cur_u->socket, &clientfds)) {
 			r |= connections_handle(cur_u->socket);
 		}
 		cur_u = cur_u->next;
@@ -334,7 +358,7 @@ void receive_sync()
 	if (connections_incoming_handle()) {
 		printf("connections_incoming_handle failed!\n");
 	}
-	return;
+
 	if (connections_active_handle()) {
 		printf("connections_active_handle failed!\n");
 	}
