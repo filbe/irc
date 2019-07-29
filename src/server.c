@@ -45,7 +45,14 @@ void adduser(char *nick, int socket)
 }
 
 struct users *user_find_by_socket(int socket) {
-	/* TODO: return a valid user or NULL */
+	struct users *cur_u;
+	cur_u = all_users;
+	while (cur_u->nick) {
+		if (cur_u->socket == socket) {
+			return cur_u;
+		}
+		cur_u = cur_u->next;
+	}
 	return NULL;
 }
 
@@ -202,11 +209,10 @@ int connections_handle(int sock) {
 }
 
 int connections_incoming_handle() {
-	int new_socket = 0;
 	int r = 0;
 	/* TODO:
 	
-	check if we have something in incoming sock
+	check if we have something in incoming sock (check server_fd status)
 		- new connection?
 			new_socket = (get new socket)
 			*/
@@ -221,14 +227,14 @@ int connections_incoming_handle() {
 
 int connections_active_handle() {
 	int r = 0;
-	/* TODO:
-	
-	loop for all users
-		if (something in incoming conn sock) {
-			r |= connections_handle(user->sock);
+	struct users *cur_u;
+	cur_u = all_users;
+	while (cur_u->nick) {
+		if (0 /* check if something is coming from cur_u->socket */) {
+			r |= connections_handle(cur_u->sock);
 		}
-
-	*/
+		cur_u = cur_u->next;
+	}
 	return r;
 }
 
