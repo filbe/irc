@@ -144,12 +144,14 @@ void init_connection(int port)
 
 	// Creating socket file descriptor
 	if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
+		printf("ic1\n");
 		perror("socket failed");
 		exit(EXIT_FAILURE);
 	}
 
 	if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR,
 	               &opt, sizeof(opt))) {
+		printf("ic2\n");
 		perror("setsockopt");
 		exit(EXIT_FAILURE);
 	}
@@ -159,10 +161,12 @@ void init_connection(int port)
 
 	if (bind(server_fd, (struct sockaddr *)&address,
 	         sizeof(address)) < 0) {
+		printf("ic3\n");
 		perror("bind failed");
 		exit(EXIT_FAILURE);
 	}
 	if (listen(server_fd, 3) < 0) {
+		printf("ic4\n");
 		perror("listen");
 		exit(EXIT_FAILURE);
 	}
@@ -171,16 +175,16 @@ void init_connection(int port)
 	max_sd = max_sd > server_fd ? max_sd : server_fd;
 }
 
-void send_everyone_but(char *nick, char *send_string)
+void send_everyone(char *nick, char *send_string)
 {
 	struct users *cur_u;
 	cur_u = all_users;
+	char tosend[65535] = {0};
+	strcat(tosend, nick);
+	strcat(tosend, "> ");
+	strcat(tosend, send_string);
+	strcat(tosend, "\n");
 	while (cur_u->nick) {
-		char tosend[65535];
-		strcat(tosend, nick);
-		strcat(tosend, "> ");
-		strcat(tosend, send_string);
-		strcat(tosend, "\n");
 		send(cur_u->socket ,  tosend, strlen(tosend) , 0);
 		cur_u = cur_u->next;
 	}
@@ -196,22 +200,14 @@ int connections_handle(int sock)
 	memset(msg_from_sock, 0, 65535);
 	read(sock, msg_from_sock, 65535);
 	if (u != NULL) {
-		printf("user %s found!\n", u->nick);
-
 		/*
 		TODO:
-
 		handle all commands that could be done.
-
 		copy message from socket to msg_from_sock
-
-
 		*/
-		send_everyone_but(u->nick, msg_from_sock);
+		send_everyone(u->nick, msg_from_sock);
 
 	} else {
-		printf("user not found from socket %d\n", sock);
-
 		char token[65535] = {0};
 		char command[65535] = {0};
 		char parameter[65535] = {0};
@@ -271,16 +267,14 @@ int connections_incoming_handle()
 {
 	int r = 0;
 	struct timeval timeout;
-	timeout.tv_sec = 1;
-	timeout.tv_usec = 0;
+	timeout.tv_sec = 0;
+	timeout.tv_usec = 10000;
 
-	printf("checking activity\n");
 	FD_ZERO(&readfds);
 	FD_SET(server_fd, &readfds);
 	int activity = select( max_sd + 1 , &readfds , NULL , NULL , &timeout);
-	printf("activity: %d\n", activity);
-
 	if ((activity < 0) && (errno != EINTR)) {
+		printf("cih1\n");
 		printf("select error\n");
 		return 1;
 	}
@@ -288,29 +282,17 @@ int connections_incoming_handle()
 		return 0;
 	}
 	if (FD_ISSET(server_fd, &readfds)) {
-		printf("incoming!\n");
 		if ((new_socket = accept(server_fd,
 		                         (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {
+			printf("cih2\n");
 			perror("accept");
 			exit(EXIT_FAILURE);
 		}
 
-
-
-		/* TODO:
-
-		check if we have something in incoming sock (check server_fd status)
-			- new connection?
-				new_socket = (get new socket)
-				*/
 		r |= connections_handle(new_socket);
 		FD_SET(new_socket, &readfds);
 		max_sd = max_sd > new_socket ? max_sd : new_socket;
-		/*
-		- other situations
-		print some debug data. how to detect connection close or other exceptions?
 
-		*/
 		return r;
 	}
 	return 0;
@@ -318,7 +300,6 @@ int connections_incoming_handle()
 
 int connections_active_handle()
 {
-	printf("active handle()\n");
 	struct timeval timeout;
 	timeout.tv_sec = 1;
 	timeout.tv_usec = 0;
@@ -327,24 +308,19 @@ int connections_active_handle()
 	struct users *cur_u;
 	cur_u = all_users;
 	while (cur_u->nick && cur_u->nick != NULL && strcmp(cur_u->nick, "") != 0) {
-		printf("nick found: '%s'\n", cur_u->nick);
 		FD_SET(cur_u->socket, &clientfds);
 		max_client_sd = max_client_sd > cur_u->socket ? max_client_sd : cur_u->socket;
 		cur_u = cur_u->next;
 	}
-	printf("ennen selectiä\n");
 	int activity = select( max_client_sd + 1 , &clientfds , NULL , NULL , &timeout);
 	if ((activity < 0) && (errno != EINTR)) {
-		printf("select error\n");
 		return 1;
 	}
 	if (activity == 0) {
-		printf("joku printti\n");
 		return 0;
 	}
 	cur_u = all_users;
 	while (cur_u->nick && strcmp(cur_u->nick, "") != 0) {
-		printf("checking nick %s\n", cur_u->nick);
 		if (FD_ISSET(cur_u->socket, &clientfds)) {
 			r |= connections_handle(cur_u->socket);
 		}

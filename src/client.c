@@ -72,9 +72,6 @@ void server_connect(char server[256])
 	} else {
 		printf("socket: %d\n", current_window_sock);
 		char *connect_msg;
-		char *nick_;
-		asprintf(&nick_,"%s",getpwuid(getuid())->pw_name);
-		strcpy(nick, nick_);
 		if (asprintf(&connect_msg, "/nick %s", nick)) {
 
 		}
@@ -188,22 +185,45 @@ int command_parse(char *cmd)
 	return 1; /* command failed */
 }
 
+int write_complete = 0;
+
+void *writing_thread()
+{
+	write_complete = 0;
+	memset(last_command, 0, sizeof(last_command));
+	command_get(last_command);
+	if (command_parse(last_command)) {
+		printf("Command failed, invalid command or missing parameters! '%s'\n", last_command);
+	}
+	write_complete = 1;
+	return 0;
+}
+
 
 int main(int argc, char *argv[])
 {
 	getlogin_r(nick, sizeof(nick));
+	if (argc > 1 && strlen(argv[1]) > 0) {
+		nick_set(argv[1]);
+	}
+
+	pthread_t w_t_id; 
+    pthread_create(&w_t_id, NULL, writing_thread, NULL); 
+    
+
 
 	while (1) {
-		memset(last_command, 0, sizeof(last_command));
-		command_get(last_command);
-		if (command_parse(last_command)) {
-			printf("Command failed, invalid command or missing parameters! '%s'\n", last_command);
+		if (write_complete == 1) {
+			pthread_join(w_t_id, NULL);
+			pthread_create(&w_t_id, NULL, writing_thread, NULL); 
 		}
 		if (nick != NULL && strlen(nick)) {
 			char *p = server_read(current_window_sock);
-			printf("From server: %s\n", p);
+			if (strlen(p) > 0) {
+				printf("%s\n", p);
+			}
 			free(p);
 		}
-
 	}
+	pthread_join(w_t_id, NULL);
 }
