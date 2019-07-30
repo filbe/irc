@@ -54,19 +54,17 @@ void server_new(int sock)
 	/* TODO: create new instance to servers linked list */
 }
 
-void server_connect(char server[256])
+void server_connect(char *server, int portno)
 {
 	/* TODO: server connection */
 	struct sockaddr_in serv_addr;
-
-	serv_addr.sin_addr.s_addr = INADDR_ANY;
-	int portno = atoi(server);
+	serv_addr.sin_addr.s_addr = inet_addr(server); 
 	current_window_sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (current_window_sock < 0) {
 		printf("ERROR opening socket");
 	}
 	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_port = htons(portno);
+	serv_addr.sin_port = htons(portno);	
 	if (connect(current_window_sock, &serv_addr, sizeof(serv_addr)) < 0) {
 		printf("ERROR connecting");
 	} else {
@@ -174,7 +172,13 @@ int command_parse(char *cmd)
 			}
 			return 0;
 		} else if (strcmp(command, "/connect") == 0) {
-			server_connect(parameter);
+			char *server;
+			int port;
+			server = malloc(strlen(parameter)+1);
+			strcpy(server, parameter);
+			server = strtok(server, " ");
+			port = atoi(strtok(NULL, "\0"));
+			server_connect(server, port);
 			return 0;
 		} else {
 			return 1;

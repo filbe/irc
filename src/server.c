@@ -43,6 +43,7 @@ int adduser(char *nick, int socket)
 		if (strlen(users[i].nick) == 0) {
 			strcpy(users[i].nick, nick);
 			users[i].socket = socket;
+			users[i].connected = 1;
 			break;
 		}
 	}
@@ -62,13 +63,13 @@ struct user *user_find_by_socket(int socket)
 
 void removeuser(char *nick)
 {
+	char *m;
+	asprintf(&m, "User %s has been disconnected.", nick);
+	printf("%s\n", m);
 	for (int i = 0; i < MAX_USERS; i++) {
-		if (strcmp(users[i].nick, nick) == 0) {
-			char *m;
-			asprintf(&m, "User %s has been disconnected.", users[i].nick);
-			memset(&users[i], 0, sizeof(struct user));
-
-			printf("%s\n", m);
+		if (strcmp(users[i].nick, nick) == 0 && strlen(users[i].nick) > 0 && users[i].connected == 1) {
+			users[i].connected = 0;
+			memset(&users[i], 0, sizeof(struct user));			
 			send_everyone("", m);
 			free(m);
 		}
@@ -182,17 +183,10 @@ int connections_handle(int sock)
 	read(sock, msg_from_sock, 65535);
 	if (u != NULL) {
 
-		if (strlen(msg_from_sock) < 1) {
+		if (strlen(msg_from_sock) < 1 && strlen(u->nick) > 0) {
 			nick = malloc(strlen(u->nick) + 1);
 			strcpy(nick, u->nick);
 			removeuser(u->nick);
-			memset(msg_from_sock, 0, 65535);
-			char *tmp_str;
-			asprintf(&tmp_str, "user %s has been disconnected", nick);
-			strcpy(msg_from_sock, tmp_str);
-			free(tmp_str);
-			send_everyone(nick, msg_from_sock);
-			printf("%s\n", msg_from_sock);
 			free(nick);
 			return 0;
 		}
@@ -321,7 +315,7 @@ int connections_active_handle()
 	}
 
 	for (int i = 0; i < MAX_USERS; i++) {
-		if (users[i].nick && strcmp(users[i].nick, "") != 0) {
+		if (strlen(users[i].nick) > 0 && strcmp(users[i].nick, "") != 0) {
 			if (FD_ISSET(users[i].socket, &clientfds)) {
 				r |= connections_handle(users[i].socket);
 			}
