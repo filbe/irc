@@ -9,15 +9,15 @@
 #include <errno.h>
 
 
-struct users {
+struct user {
 	char nick[128];
 	int socket;
-	struct users *prev;
-	struct users *next;
+	int connected;
 };
 
-struct users *all_users;
-struct users *last_user;
+#define MAX_USERS 128
+
+struct user users[MAX_USERS];
 
 int recv_socket = -1;
 
@@ -28,98 +28,70 @@ int addrlen;
 char buffer[1024];
 fd_set readfds, clientfds;
 
+void listusers();
+void send_everyone(char *nick, char *send_string);
+
 int adduser(char *nick, int socket)
 {
 	if (nick == NULL) {
 		printf("no username specified, adduser() failed\n");
 		return 1;
 	} else {
-		printf("adding user %s\n", nick);
 	}
 
-	max_sd = max_sd > socket ? max_sd : socket;
-	if (strcmp(last_user->nick, "") == 0) {
-		strcpy(last_user->nick, nick);
-		last_user->socket = socket;
-	} else {
-		struct users *new_user = malloc(sizeof(struct users));
-		memset(new_user, 0, sizeof(struct users));
-		strcpy(new_user->nick, nick);
-		new_user->socket = socket;
-		new_user->prev = last_user;
-		last_user->next = new_user;
-		last_user = new_user;
+	for (int i = 0; i < MAX_USERS; i++) {
+		if (strlen(users[i].nick) == 0) {
+			strcpy(users[i].nick, nick);
+			users[i].socket = socket;
+			break;
+		}
 	}
+
 	return 0;
 }
 
-struct users *user_find_by_socket(int socket)
+struct user *user_find_by_socket(int socket)
 {
-	struct users *cur_u;
-	cur_u = all_users;
-	while (cur_u->nick) {
-		if (cur_u->socket == socket) {
-			return cur_u;
+	for (int i = 0; i < MAX_USERS; i++) {
+		if (users[i].socket == socket) {
+			return &users[i];
 		}
-		cur_u = cur_u->next;
 	}
 	return NULL;
 }
 
 void removeuser(char *nick)
 {
-	struct users *cur_u;
-	cur_u = all_users;
-	while (cur_u->nick) {
-		if (strcmp(cur_u->nick, nick) == 0) {
-			if (cur_u->prev != NULL) {
-				cur_u->prev->next = cur_u->next;
-			}
-			if (cur_u->next != NULL) {
-				cur_u->next->prev = cur_u->prev;
-			}
-			struct users *todel = cur_u;
-			if (cur_u->prev != NULL && strlen(cur_u->prev->nick) > 0) {
-				cur_u = cur_u->prev;
-			} else if (cur_u->next != NULL && strlen(cur_u->next->nick) > 0) {
-				cur_u = cur_u->next;
-			} else {
-				cur_u = NULL;
-				all_users = cur_u;
-			}
-			free(todel);
-			return;
-		}
-		if (cur_u != NULL) {
-			cur_u = cur_u->next;
-		} else {
-			break;
-		}
+	for (int i = 0; i < MAX_USERS; i++) {
+		if (strcmp(users[i].nick, nick) == 0) {
+			char *m;
+			asprintf(&m, "User %s has been disconnected.", users[i].nick);
+			memset(&users[i], 0, sizeof(struct user));
 
+			printf("%s\n", m);
+			send_everyone("", m);
+			free(m);
+		}
 	}
 }
 
 int getsocketbynick(char *nick)
 {
-	struct users *cur_u;
-	cur_u = all_users;
-	while (cur_u->nick) {
-		if (strcmp(cur_u->nick, nick) == 0) {
-			return cur_u->socket;
+	for (int i = 0; i < MAX_USERS; i++) {
+		if (strcmp(users[i].nick, nick) == 0) {
+			return users[i].socket;
 		}
-		cur_u = cur_u->next;
 	}
-	return 0;
+	return -1;
 }
 
 void listusers()
 {
-	struct users *cur_u;
-	cur_u = all_users;
 	printf("Listing all users:\n");
-	while (cur_u->nick) {
-		printf("- <%s>\n", cur_u->nick);
-		cur_u = cur_u->next;
+	for (int i = 0; i < MAX_USERS; i++) {
+		if (strlen(users[i].nick) > 0) {
+			printf("- <%s> (sock %d)\n", users[i].nick, users[i].socket);
+		}
 	}
 	printf("________________\n");
 }
@@ -127,27 +99,28 @@ void listusers()
 char *listusers_string(char users_string[])
 {
 	strcpy(users_string, "");
-	struct users *cur_u;
-	cur_u = all_users;
-	while (cur_u->nick) {
-		strcat(users_string, "[");
-		strcat(users_string, cur_u->nick);
-		strcat(users_string, "] ");
-		cur_u = cur_u->next;
+	for (int i = 0; i < MAX_USERS; i++) {
+		if (strlen(users[i].nick) > 0) {
+			strcat(users_string, "[");
+			strcat(users_string, users[i].nick);
+			strcat(users_string, "] ");
+		}
 	}
 	return users_string;
 }
 
 void init_users()
 {
-	all_users = malloc(sizeof(struct users));
-	memset(all_users, 0, sizeof(struct users));
-	last_user = all_users;
+	for (int i = 0; i < MAX_USERS; i++) {
+		memset(&users[i], 0, sizeof(struct user));
+	}
 }
 
 void clear_users()
 {
-
+	for (int i = 0; i < MAX_USERS; i++) {
+		memset(&users[i], 0, sizeof(struct user));
+	}
 }
 
 void init_connection(int port)
@@ -158,14 +131,12 @@ void init_connection(int port)
 
 	// Creating socket file descriptor
 	if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
-		printf("ic1\n");
 		perror("socket failed");
 		exit(EXIT_FAILURE);
 	}
 
 	if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR,
 	               &opt, sizeof(opt))) {
-		printf("ic2\n");
 		perror("setsockopt");
 		exit(EXIT_FAILURE);
 	}
@@ -175,12 +146,10 @@ void init_connection(int port)
 
 	if (bind(server_fd, (struct sockaddr *)&address,
 	         sizeof(address)) < 0) {
-		printf("ic3\n");
 		perror("bind failed");
 		exit(EXIT_FAILURE);
 	}
 	if (listen(server_fd, 3) < 0) {
-		printf("ic4\n");
 		perror("listen");
 		exit(EXIT_FAILURE);
 	}
@@ -191,16 +160,14 @@ void init_connection(int port)
 
 void send_everyone(char *nick, char *send_string)
 {
-	struct users *cur_u;
-	cur_u = all_users;
 	char tosend[65535] = {0};
 	strcat(tosend, nick);
 	strcat(tosend, "> ");
 	strcat(tosend, send_string);
 	strcat(tosend, "\n");
-	while (cur_u->nick) {
-		send(cur_u->socket ,  tosend, strlen(tosend) , 0);
-		cur_u = cur_u->next;
+
+	for (int i = 0; i < MAX_USERS; i++) {
+		send(users[i].socket ,  tosend, strlen(tosend) , 0);
 	}
 }
 
@@ -209,19 +176,16 @@ int connections_handle(int sock)
 	char *nick = NULL;
 	char *msg_from_sock = NULL;
 	char *msg_to_client = NULL;
-	struct users *u = user_find_by_socket(sock);
+	struct user *u = user_find_by_socket(sock);
 	msg_from_sock = malloc(65535);
 	memset(msg_from_sock, 0, 65535);
 	read(sock, msg_from_sock, 65535);
-
 	if (u != NULL) {
+
 		if (strlen(msg_from_sock) < 1) {
 			nick = malloc(strlen(u->nick) + 1);
 			strcpy(nick, u->nick);
-			printf("before: ");
-			listusers();
 			removeuser(u->nick);
-			listusers();
 			memset(msg_from_sock, 0, 65535);
 			char *tmp_str;
 			asprintf(&tmp_str, "user %s has been disconnected", nick);
@@ -306,7 +270,6 @@ int connections_incoming_handle()
 	FD_SET(server_fd, &readfds);
 	int activity = select( max_sd + 1 , &readfds , NULL , NULL , &timeout);
 	if ((activity < 0) && (errno != EINTR)) {
-		printf("cih1\n");
 		printf("select error\n");
 		return 1;
 	}
@@ -316,7 +279,6 @@ int connections_incoming_handle()
 	if (FD_ISSET(server_fd, &readfds)) {
 		if ((new_socket = accept(server_fd,
 		                         (struct sockaddr *)&address, (socklen_t*)&addrlen)) < 0) {
-			printf("cih2\n");
 			perror("accept");
 			exit(EXIT_FAILURE);
 		}
@@ -332,32 +294,41 @@ int connections_incoming_handle()
 
 int connections_active_handle()
 {
+
 	struct timeval timeout;
 	timeout.tv_sec = 1;
 	timeout.tv_usec = 0;
 	FD_ZERO(&clientfds);
 	int r = 0;
-	struct users *cur_u;
-	cur_u = all_users;
-	while (cur_u->nick && cur_u->nick != NULL && strcmp(cur_u->nick, "") != 0) {
-		FD_SET(cur_u->socket, &clientfds);
-		max_client_sd = max_client_sd > cur_u->socket ? max_client_sd : cur_u->socket;
-		cur_u = cur_u->next;
+
+
+	for (int i = 0; i < MAX_USERS; i++) {
+		if (strlen(users[i].nick) > 0) {
+			FD_SET(users[i].socket, &clientfds);
+			max_client_sd = max_client_sd > users[i].socket ? max_client_sd : users[i].socket;
+		} else {
+			break;
+		}
 	}
+
 	int activity = select( max_client_sd + 1 , &clientfds , NULL , NULL , &timeout);
+
 	if ((activity < 0) && (errno != EINTR)) {
 		return 1;
 	}
 	if (activity == 0) {
 		return 0;
 	}
-	cur_u = all_users;
-	while (cur_u->nick && strcmp(cur_u->nick, "") != 0) {
-		if (FD_ISSET(cur_u->socket, &clientfds)) {
-			printf("cur_u fd is set\n");
-			r |= connections_handle(cur_u->socket);
+
+	for (int i = 0; i < MAX_USERS; i++) {
+		if (users[i].nick && strcmp(users[i].nick, "") != 0) {
+			if (FD_ISSET(users[i].socket, &clientfds)) {
+				r |= connections_handle(users[i].socket);
+			}
+
+		} else {
+			break;
 		}
-		cur_u = cur_u->next;
 	}
 	return r;
 }
