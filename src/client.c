@@ -94,8 +94,9 @@ int server_send(int sock, char *cmd)
 		return 1;
 	}
 	/* TODO: send stuff to server */
-	write(sock, cmd, strlen(cmd));
-	printf("TO server: '%s'\n", cmd);
+	if (strlen(cmd) > 0) {
+		write(sock, cmd, strlen(cmd));
+	}
 	return 0;
 }
 
@@ -207,15 +208,15 @@ int main(int argc, char *argv[])
 		nick_set(argv[1]);
 	}
 
-	pthread_t w_t_id; 
-    pthread_create(&w_t_id, NULL, writing_thread, NULL); 
-    
+	pthread_t w_t_id;
+	pthread_create(&w_t_id, NULL, writing_thread, NULL);
+
 
 
 	while (1) {
 		if (write_complete == 1) {
 			pthread_join(w_t_id, NULL);
-			pthread_create(&w_t_id, NULL, writing_thread, NULL); 
+			pthread_create(&w_t_id, NULL, writing_thread, NULL);
 		}
 		if (nick != NULL && strlen(nick)) {
 			char *p = server_read(current_window_sock);

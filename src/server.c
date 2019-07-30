@@ -43,6 +43,7 @@ int adduser(char *nick, int socket)
 		last_user->socket = socket;
 	} else {
 		struct users *new_user = malloc(sizeof(struct users));
+		memset(new_user, 0, sizeof(struct users));
 		strcpy(new_user->nick, nick);
 		new_user->socket = socket;
 		new_user->prev = last_user;
@@ -78,11 +79,23 @@ void removeuser(char *nick)
 				cur_u->next->prev = cur_u->prev;
 			}
 			struct users *todel = cur_u;
-			cur_u = cur_u->next;
+			if (cur_u->prev != NULL && strlen(cur_u->prev->nick) > 0) {
+				cur_u = cur_u->prev;
+			} else if (cur_u->next != NULL && strlen(cur_u->next->nick) > 0) {
+				cur_u = cur_u->next;
+			} else {
+				cur_u = NULL;
+				all_users = cur_u;
+			}
 			free(todel);
 			return;
 		}
-		cur_u = cur_u->next;
+		if (cur_u != NULL) {
+			cur_u = cur_u->next;
+		} else {
+			break;
+		}
+
 	}
 }
 
@@ -128,6 +141,7 @@ char *listusers_string(char users_string[])
 void init_users()
 {
 	all_users = malloc(sizeof(struct users));
+	memset(all_users, 0, sizeof(struct users));
 	last_user = all_users;
 }
 
@@ -199,7 +213,25 @@ int connections_handle(int sock)
 	msg_from_sock = malloc(65535);
 	memset(msg_from_sock, 0, 65535);
 	read(sock, msg_from_sock, 65535);
+
 	if (u != NULL) {
+		if (strlen(msg_from_sock) < 1) {
+			nick = malloc(strlen(u->nick) + 1);
+			strcpy(nick, u->nick);
+			printf("before: ");
+			listusers();
+			removeuser(u->nick);
+			listusers();
+			memset(msg_from_sock, 0, 65535);
+			char *tmp_str;
+			asprintf(&tmp_str, "user %s has been disconnected", nick);
+			strcpy(msg_from_sock, tmp_str);
+			free(tmp_str);
+			send_everyone(nick, msg_from_sock);
+			printf("%s\n", msg_from_sock);
+			free(nick);
+			return 0;
+		}
 		/*
 		TODO:
 		handle all commands that could be done.
@@ -322,6 +354,7 @@ int connections_active_handle()
 	cur_u = all_users;
 	while (cur_u->nick && strcmp(cur_u->nick, "") != 0) {
 		if (FD_ISSET(cur_u->socket, &clientfds)) {
+			printf("cur_u fd is set\n");
 			r |= connections_handle(cur_u->socket);
 		}
 		cur_u = cur_u->next;
