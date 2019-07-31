@@ -1,10 +1,12 @@
 #define _GNU_SOURCE
 #include <unistd.h>
+#include <pwd.h>
 #include <stdio.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/select.h>
 #include <sys/time.h>
+#include <sys/types.h>
 #include <stdlib.h>
 #include <netinet/in.h>
 #include <string.h>
@@ -14,144 +16,249 @@
 #include <pthread.h>
 #include <unistd.h>
 
-
-#define FLUSH_STDIN(x) {if(x[strlen(x)-1]!='\n'){do fgets(Junk,16,stdin);while(Junk[strlen(Junk)-1]!='\n');}else x[strlen(x)-1]='\0';}
-char Junk[16];
-
 #define MAXBUFSIZE 65535
-// #define PORT 1234
-#define SA struct sockaddr
 
-fd_set readfds;
+struct servers {
+	char **channels;
+	int socket;
+	struct servers *prev;
+	struct servers *next;
+};
 
-char *nick = "";
+char msgs[128][MAXBUFSIZE] = {0};
 
-int sockfd, data_writing = 0, data_reading = 0;
+void drawMessages();
 
-void *recv_server()
+void addMessage(char *message)
 {
-	char recv_buff[MAXBUFSIZE];
-
-	while (1) {
-		int activity = select( sockfd , &readfds , NULL , NULL , NULL);
-		printf("RR = %d\n",activity);
-		if (activity > 0) {
-			if (data_writing == 0 && FD_ISSET(sockfd, &readfds)) {
-				data_reading = 1;
-
-				bzero(recv_buff, sizeof(recv_buff));
-				printf("reading\n");
-				read(sockfd, recv_buff, sizeof(recv_buff));
-				printf("red.\n");
-				data_reading = 0;
-				printf("%s\n", recv_buff);
-				FD_ZERO(&readfds);
-				FD_SET(sockfd, &readfds);
-
-			} else {
-				printf("No data avail.\n");
-			}
-			sleep(1);
-		}
-		sleep(1);
+	for (int i = 1; i < 128; i++) {
+		memcpy(msgs[i - 1], msgs[i], MAXBUFSIZE);
 	}
+	memcpy(msgs[127], message, strlen(message) + 1);
+	drawMessages();
 }
+
+void drawMessages()
+{
+	struct winsize w;
+	ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
+	int total_rows = w.ws_row - 5;
+
+	printf("\e[1;1H\e[2J\033[0;0H");
+	for (int i = 127 - total_rows; i < 128; i++) {
+		printf("%s", msgs[i]);
+	}
+	printf("\033[%d;0H\n\n", total_rows + 3);
+}
+
+char nick[255];
+
+int current_window_sock = -1;
+
+// const char *c = "";
+// int strlen(char *c) {
+// 	int counter = 0;
+// 	while(c[counter] != 0) {
+// 		counter++;
+// 	}
+// 	return counter;
+// }
+int server_send(int sock, char *cmd);
+
+char *concat(const char *str1, const char *str2)
+{
+	int sz = strlen(str1) + strlen(str2) + 1;
+	char *ret = malloc(sz);
+	memset(ret, 0, sz);
+	strcpy(ret, str1);
+	strcat(ret, str2);
+	return ret;
+}
+
+void server_new(int sock)
+{
+	/* TODO: create new instance to servers linked list */
+}
+
+void server_connect(char *server, int portno)
+{
+	/* TODO: server connection */
+	struct sockaddr_in serv_addr;
+	serv_addr.sin_addr.s_addr = inet_addr(server);
+	current_window_sock = socket(AF_INET, SOCK_STREAM, 0);
+	if (current_window_sock < 0) {
+		printf("ERROR opening socket");
+	}
+	serv_addr.sin_family = AF_INET;
+	serv_addr.sin_port = htons(portno);
+	if (connect(current_window_sock, &serv_addr, sizeof(serv_addr)) < 0) {
+		printf("ERROR connecting");
+	} else {
+		printf("socket: %d\n", current_window_sock);
+		char *connect_msg;
+		if (asprintf(&connect_msg, "/nick %s", nick)) {
+
+		}
+
+		server_send(current_window_sock, connect_msg);
+		free(connect_msg);
+	}
+
+
+	// int sock = 0;
+
+	// server_new(sock);
+	// current_window_sock = sock;
+}
+
+int server_send(int sock, char *cmd)
+{
+	if (sock < 3) {
+		printf("Socket unset!\n");
+		return 1;
+	}
+	/* TODO: send stuff to server */
+	if (strlen(cmd) > 0) {
+		write(sock, cmd, strlen(cmd));
+	}
+	return 0;
+}
+
+void all_servers_send()
+{
+	/* TODO: send stuff to all servers */
+}
+
+
+char *server_read(int sock)
+{
+	char *r = malloc(65535);
+	memset(r, 0, 65535);
+	read(sock, r, 65535);
+	return r;
+}
+
+void server_disconnect(int sock)
+{
+	/* TODO: send disconnect signal to server and close connection */
+}
+
+
+
+void nick_set(char *n)
+{
+	printf("nick_set(): %s\n", n);
+	strcpy(nick, n);
+	all_servers_send(concat("/nick ", nick));
+}
+
+
+char last_command[65535];
+void command_get(char *cmd)
+{
+	char str[65535] = {0};
+	int i = 0;
+	char c;
+	printf("%s> ", nick);
+	do {
+		c = getchar();
+		if (c == '\n' || c == 0 || c == EOF) {
+			str[i++] = 0;
+			break;
+		}
+		str[i++] = c;
+	} while (1);
+	strcpy(cmd, str);
+	if (strlen(cmd) == 0){
+		command_get(cmd);
+	}
+	// strcpy(last_command, cmd);
+}
+
+int command_parse(char *cmd)
+{
+	char token[65535] = {0};
+	char command[65535] = {0};
+	char parameter[65535] = {0};
+	char cmd_[65535] = {0};
+	strcpy(cmd_, cmd);
+	if (cmd[0] == '/') {
+		strcpy(token, strtok(cmd_, " "));
+		strcpy(command, token);
+		char *t = strtok(NULL, "\0");
+		if (t != NULL) {
+			strcpy(parameter, t);
+		}
+
+		if (strcmp(command, "/msg") == 0 ||
+		        strcmp(command, "/nick") == 0 ||
+		        strcmp(command, "/join") == 0 ||
+		        strcmp(command, "/whois") == 0 ||
+		        strcmp(command, "/list") == 0) {
+			/* forward to server as is */
+			server_send(current_window_sock, cmd);
+			if (strcmp(command, "/nick") == 0) {
+				nick_set(strtok(parameter, " "));
+			}
+			return 0;
+		} else if (strcmp(command, "/connect") == 0) {
+			char *server;
+			int port;
+			server = malloc(strlen(parameter) + 1);
+			strcpy(server, parameter);
+			server = strtok(server, " ");
+			port = atoi(strtok(NULL, "\0"));
+			server_connect(server, port);
+			return 0;
+		} else {
+			return 1;
+		}
+	} else {
+		server_send(current_window_sock, cmd);
+		return 0;
+	}
+	return 1; /* command failed */
+}
+
+int write_complete = 0;
+
+void *writing_thread()
+{
+	write_complete = 0;
+	memset(last_command, 0, sizeof(last_command));
+	command_get(last_command);
+	if (command_parse(last_command)) {
+		printf("Command failed, invalid command or missing parameters! '%s'\n", last_command);
+	}
+	write_complete = 1;
+	return 0;
+}
+
 
 int main(int argc, char *argv[])
 {
-	int sockfd;
-	struct sockaddr_in servaddr;
-	char *argument = "";
-	int port = 0;
+	getlogin_r(nick, sizeof(nick));
+	if (argc > 1 && strlen(argv[1]) > 0) {
+		nick_set(argv[1]);
+	}
 
-	char channels[40];
+	pthread_t w_t_id;
+	pthread_create(&w_t_id, NULL, writing_thread, NULL);
 
-	for (int i = 1; i < argc; i++) {
-		asprintf(&argument, "%s", argv[i]);
-		if (strcmp(argument, "-p") == 0 || strcmp(argument, "--port") == 0) {
-			free(argument);
-			asprintf(&argument, "%s", argv[++i]);
-			port = atoi(argument);
-			printf("port: %d\n", port);
-		} else if (strcmp(argument, "-n") == 0 || strcmp(argument, "--nick") == 0) {
-			free(argument);
-			asprintf(&argument, "%s", argv[++i]);
-			nick = argument;
-			printf("nickname: %s\n", nick);
-		} else if (strcmp(argument, "-c") == 0 || strcmp(argument, "--channels") == 0) {
-			free(argument);
-			asprintf(&argument, "%s", argv[++i]);
-			channels[i - 1] = *argument;
-			printf("port: %s\n", channels);
-		} else if (strcmp(argument, "-p") != 0 || strcmp(argument, "--port") != 0 || strcmp(argument, "-n") != 0 || strcmp(argument, "--nick") != 0
-		           || strcmp(argument, "-c") != 0 || strcmp(argument, "-channel") != 0) {
-			printf("Invalid command line argument(s)!\n");
-			free(argument);
-			return 0;
+
+
+	while (1) {
+		if (write_complete == 1) {
+			pthread_join(w_t_id, NULL);
+			pthread_create(&w_t_id, NULL, writing_thread, NULL);
 		}
-
-		// socket create and varification
-		sockfd = socket(AF_INET, SOCK_STREAM, 0);
-		if (sockfd == -1) {
-			printf("socket creation failed...\n");
-			exit(0);
-		} else {
-			printf("Socket successfully created..\n");
-			printf("Socket fd: %d\n", sockfd);
-		}
-		bzero(&servaddr, sizeof(servaddr));
-
-		// assign IP, PORT
-		servaddr.sin_family = AF_INET;
-		servaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
-		servaddr.sin_port = htons(port);
-
-		// connect the client socket to server socket
-		if (connect(sockfd, (SA*)&servaddr, sizeof(servaddr)) != 0) {
-			printf("connection with the server failed...\n");
-			exit(0);
-		} else {
-			printf("connected to the server..\n");
-		}
-
-		pthread_t t_recv;
-
-
-		FD_ZERO(&readfds);
-		FD_SET(sockfd, &readfds);
-
-
-		pthread_create(&t_recv, NULL, recv_server, NULL);
-		char send_buff[MAXBUFSIZE];
-		memset(send_buff, 0, sizeof send_buff);
-
-		data_writing = 0;
-		while (1) {
-
-
-
-			char buff[MAXBUFSIZE];
-			int n;
-			for (;;) {
-				bzero(buff, sizeof(buff));
-				printf("Enter the string : ");
-				n = 0;
-				while (data_reading == 1) {};
-				while ((buff[n++] = getchar()) != '\n')
-					;
-				data_writing = 1;
-				while (data_reading == 1) {};
-				printf("writing\n");
-				int r = write(sockfd, buff, strlen(buff));
-				char buf[1024];
-				read(sockfd, buf, 1024);
-				printf("%s\n", buf);
-				FD_ZERO(&readfds);
-				FD_SET(sockfd, &readfds);
-				printf("wrote %d bytes\n", r);
-				data_writing = 0;
-				bzero(buff, sizeof(buff));
+		if (nick != NULL && strlen(nick)) {
+			char *p = server_read(current_window_sock);
+			if (strlen(p) > 0) {
+				addMessage(p);
 			}
+			free(p);
 		}
 	}
+	pthread_join(w_t_id, NULL);
 }
