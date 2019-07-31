@@ -25,6 +25,32 @@ struct servers {
 	struct servers *next;
 };
 
+char msgs[128][MAXBUFSIZE] = {0};
+
+void drawMessages();
+
+void addMessage(char *message)
+{
+	for (int i = 1; i < 128; i++) {
+		memcpy(msgs[i - 1], msgs[i], MAXBUFSIZE);
+	}
+	memcpy(msgs[127], message, strlen(message)+1);
+	drawMessages();
+}
+
+void drawMessages()
+{
+	struct winsize w;
+	ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
+	int total_rows = w.ws_row - 5;
+
+	printf("\e[1;1H\e[2J\033[0;0H");
+	for (int i = 127 - total_rows; i < 128; i++) {
+		printf("%s", msgs[i]);
+	}
+	printf("\033[%d;0H\n\n", total_rows + 3);
+}
+
 char nick[255];
 
 int current_window_sock = -1;
@@ -58,13 +84,13 @@ void server_connect(char *server, int portno)
 {
 	/* TODO: server connection */
 	struct sockaddr_in serv_addr;
-	serv_addr.sin_addr.s_addr = inet_addr(server); 
+	serv_addr.sin_addr.s_addr = inet_addr(server);
 	current_window_sock = socket(AF_INET, SOCK_STREAM, 0);
 	if (current_window_sock < 0) {
 		printf("ERROR opening socket");
 	}
 	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_port = htons(portno);	
+	serv_addr.sin_port = htons(portno);
 	if (connect(current_window_sock, &serv_addr, sizeof(serv_addr)) < 0) {
 		printf("ERROR connecting");
 	} else {
@@ -160,7 +186,7 @@ int command_parse(char *cmd)
 		if (t != NULL) {
 			strcpy(parameter, t);
 		}
-		
+
 		if (strcmp(command, "/msg") == 0 ||
 		        strcmp(command, "/nick") == 0 ||
 		        strcmp(command, "/join") == 0 ||
@@ -175,21 +201,19 @@ int command_parse(char *cmd)
 		} else if (strcmp(command, "/connect") == 0) {
 			char *server;
 			int port;
-			server = malloc(strlen(parameter)+1);
+			server = malloc(strlen(parameter) + 1);
 			strcpy(server, parameter);
 			server = strtok(server, " ");
 			port = atoi(strtok(NULL, "\0"));
 			server_connect(server, port);
 			return 0;
 		} else {
-			printf("CMD: %s\n", command);
 			return 1;
 		}
 	} else {
 		server_send(current_window_sock, cmd);
 		return 0;
 	}
-	printf("!\n");
 	return 1; /* command failed */
 }
 
@@ -228,7 +252,7 @@ int main(int argc, char *argv[])
 		if (nick != NULL && strlen(nick)) {
 			char *p = server_read(current_window_sock);
 			if (strlen(p) > 0) {
-				printf("%s\n", p);
+				addMessage(p);
 			}
 			free(p);
 		}
