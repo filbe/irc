@@ -157,14 +157,15 @@ int command_parse(char *cmd)
 		strcpy(token, strtok(cmd_, " "));
 		strcpy(command, token);
 		char *t = strtok(NULL, "\0");
-		if (t == NULL) {
-			return 1;
+		if (t != NULL) {
+			strcpy(parameter, t);
 		}
-		strcpy(parameter, t);
+		
 		if (strcmp(command, "/msg") == 0 ||
 		        strcmp(command, "/nick") == 0 ||
 		        strcmp(command, "/join") == 0 ||
-		        strcmp(command, "/whois") == 0) {
+		        strcmp(command, "/whois") == 0 ||
+		        strcmp(command, "/list") == 0) {
 			/* forward to server as is */
 			server_send(current_window_sock, cmd);
 			if (strcmp(command, "/nick") == 0) {
@@ -181,12 +182,14 @@ int command_parse(char *cmd)
 			server_connect(server, port);
 			return 0;
 		} else {
+			printf("CMD: %s\n", command);
 			return 1;
 		}
 	} else {
 		server_send(current_window_sock, cmd);
 		return 0;
 	}
+	printf("!\n");
 	return 1; /* command failed */
 }
 

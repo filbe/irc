@@ -8,7 +8,6 @@
 #include <time.h>
 #include <errno.h>
 
-
 struct user {
 	char nick[128];
 	int socket;
@@ -30,22 +29,31 @@ fd_set readfds, clientfds;
 
 void listusers();
 void send_everyone(char *nick, char *send_string);
+void send_everyone_but(char *nick, char *send_string);
 
 int adduser(char *nick, int socket)
 {
 	if (nick == NULL) {
 		printf("no username specified, adduser() failed\n");
 		return 1;
-	} else {
 	}
-
+	int added = 0;
 	for (int i = 0; i < MAX_USERS; i++) {
 		if (strlen(users[i].nick) == 0) {
 			strcpy(users[i].nick, nick);
 			users[i].socket = socket;
 			users[i].connected = 1;
+			added = 1;
 			break;
 		}
+	}
+
+	if (added) {
+		char *m;
+		asprintf(&m, "SERVER: User %s has joined to the server.", nick);
+		printf("%s\n", m);
+		send_everyone_but(nick, m);
+		free(m);
 	}
 
 	return 0;
@@ -172,6 +180,21 @@ void send_everyone(char *nick, char *send_string)
 	}
 }
 
+void send_everyone_but(char *nick, char *send_string)
+{
+	char tosend[65535] = {0};
+	strcat(tosend, nick);
+	strcat(tosend, "> ");
+	strcat(tosend, send_string);
+	strcat(tosend, "\n");
+
+	for (int i = 0; i < MAX_USERS; i++) {
+		if (strcmp(users[i].nick, nick) != 0) {
+			send(users[i].socket ,  tosend, strlen(tosend) , 0);
+		}
+	}
+}
+
 int connections_handle(int sock)
 {
 	char *nick = NULL;
@@ -181,6 +204,14 @@ int connections_handle(int sock)
 	msg_from_sock = malloc(65535);
 	memset(msg_from_sock, 0, 65535);
 	read(sock, msg_from_sock, 65535);
+
+
+	char token[65535] = {0};
+		char command[65535] = {0};
+		char parameter[65535] = {0};
+		char cmd_[65535] = {0};
+		int r;
+		strcpy(cmd_, msg_from_sock);
 	if (u != NULL) {
 
 		if (strlen(msg_from_sock) < 1 && strlen(u->nick) > 0) {
@@ -190,20 +221,31 @@ int connections_handle(int sock)
 			free(nick);
 			return 0;
 		}
-		/*
-		TODO:
-		handle all commands that could be done.
-		copy message from socket to msg_from_sock
-		*/
+
+		if (msg_from_sock[0] == '/') {
+			strcpy(token, strtok(cmd_, " "));
+			strcpy(command, token);
+			char *t = strtok(NULL, "\0");
+			if (t != NULL) {
+				strcpy(parameter, t);
+			}
+			
+			if (strcmp(command, "/list") == 0) {
+				char users_str[65535];
+				listusers_string(users_str);
+				r = asprintf(&msg_to_client, "All users in the channel: %s.", users_str);
+				write(sock, msg_to_client, strlen(msg_to_client));
+				free(msg_to_client);
+				free(msg_from_sock);
+				return 0;
+			}
+		}
+
+		// normal message if no commands
 		send_everyone(u->nick, msg_from_sock);
 
 	} else {
-		char token[65535] = {0};
-		char command[65535] = {0};
-		char parameter[65535] = {0};
-		char cmd_[65535] = {0};
-		int r;
-		strcpy(cmd_, msg_from_sock);
+		
 
 		if (msg_from_sock[0] == '/') {
 			strcpy(token, strtok(cmd_, " "));
@@ -219,14 +261,18 @@ int connections_handle(int sock)
 			strcpy(parameter, t);
 			if (strcmp(command, "/nick") == 0) {
 				/* forward to server as is */
-				const char *welcome_msg = "Welcome to the most awesome irc ever, %s!";
-				r = asprintf(&msg_to_client, welcome_msg, parameter);
-				write(sock, msg_to_client, strlen(msg_to_client));
-
 				nick = malloc(65535);
 				memset(nick, 0, 65535);
 				strcpy(nick, parameter);
 				adduser(nick, sock);
+
+				const char *welcome_msg = "Welcome to the most awesome irc ever, %s! All users in the channel: %s.";
+				char users_str[65535];
+				listusers_string(users_str);
+				r = asprintf(&msg_to_client, welcome_msg, parameter, users_str);
+				write(sock, msg_to_client, strlen(msg_to_client));
+
+
 				free(msg_to_client);
 				free(msg_from_sock);
 				free(nick);
