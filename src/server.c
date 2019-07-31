@@ -233,7 +233,7 @@ int connections_handle(int sock)
 			if (strcmp(command, "/list") == 0) {
 				char users_str[65535];
 				listusers_string(users_str);
-				r = asprintf(&msg_to_client, "All users in the channel: %s.", users_str);
+				r = asprintf(&msg_to_client, "SERVER: All users in the channel: %s.\n", users_str);
 				write(sock, msg_to_client, strlen(msg_to_client));
 				free(msg_to_client);
 				free(msg_from_sock);
@@ -245,8 +245,21 @@ int connections_handle(int sock)
 					char oldnick[255];
 					strcpy(oldnick, u->nick);
 					strcpy(u->nick, parameter);
-					r = asprintf(&msg_to_client, "%s changed nick to %s.", oldnick, u->nick);
+					r = asprintf(&msg_to_client, "SERVER: %s changed nick to %s.\n", oldnick, u->nick);
 					send_everyone(u->nick, msg_to_client);
+				}
+				
+				free(msg_to_client);
+				free(msg_from_sock);
+				return 0;
+			}
+
+
+			if (strcmp(command, "/whois") == 0) {
+				if (strlen(parameter) > 0) {
+
+					r = asprintf(&msg_to_client, "SERVER: Mie oon %s ja miulla on sokettiloinen nrolla %d, jeejee!\n", parameter, getsocketbynick(parameter));
+					write(sock, msg_to_client, strlen(msg_to_client));
 				}
 				
 				free(msg_to_client);
@@ -266,7 +279,7 @@ int connections_handle(int sock)
 			strcpy(command, token);
 			char *t = strtok(NULL, "\0");
 			if (t == NULL) {
-				r = asprintf(&msg_to_client, "unknown error t == NULL");
+				r = asprintf(&msg_to_client, "SERVER: unknown error t == NULL\n");
 				write(sock, msg_to_client, strlen(msg_to_client));
 				free(msg_to_client);
 				free(msg_from_sock);
@@ -280,7 +293,7 @@ int connections_handle(int sock)
 				strcpy(nick, parameter);
 				adduser(nick, sock);
 
-				const char *welcome_msg = "Welcome to the most awesome irc ever, %s! All users in the channel: %s.";
+				const char *welcome_msg = "SERVER: Welcome to the most awesome irc ever, %s! All users in the channel: %s.\n";
 				char users_str[65535];
 				listusers_string(users_str);
 				r = asprintf(&msg_to_client, welcome_msg, parameter, users_str);
@@ -292,14 +305,14 @@ int connections_handle(int sock)
 				free(nick);
 				return 0;
 			} else {
-				r = asprintf(&msg_to_client, "please specify a nick name first! /nick <param>");
+				r = asprintf(&msg_to_client, "SERVER: please specify a nick name first! /nick <param>\n");
 				write(sock, msg_to_client, strlen(msg_to_client));
 				free(msg_to_client);
 				free(msg_from_sock);
 				return 0;
 			}
 		} else {
-			r = asprintf(&msg_to_client, "please specify a nick name /nick <param>");
+			r = asprintf(&msg_to_client, "SERVER: please specify a nick name /nick <param>\n");
 			write(sock, msg_to_client, strlen(msg_to_client));
 			free(msg_to_client);
 			free(msg_from_sock);
