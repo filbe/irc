@@ -34,7 +34,7 @@ void addMessage(char *message)
 	for (int i = 1; i < 128; i++) {
 		memcpy(msgs[i - 1], msgs[i], MAXBUFSIZE);
 	}
-	memcpy(msgs[127], message, strlen(message)+1);
+	memcpy(msgs[127], message, strlen(message) + 1);
 	drawMessages();
 }
 
@@ -168,7 +168,12 @@ void command_get(char *cmd)
 		}
 		str[i++] = c;
 	} while (1);
+
 	strcpy(cmd, str);
+	printf("len cmd %d\n", strlen(cmd));
+	if (strlen(cmd) == 0){
+		command_get(cmd);
+	}
 	// strcpy(last_command, cmd);
 }
 
