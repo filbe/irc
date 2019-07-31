@@ -239,6 +239,20 @@ int connections_handle(int sock)
 				free(msg_from_sock);
 				return 0;
 			}
+
+			if (strcmp(command, "/nick") == 0) {
+				if (strlen(parameter) > 0) {
+					char oldnick[255];
+					strcpy(oldnick, u->nick);
+					strcpy(u->nick, parameter);
+					r = asprintf(&msg_to_client, "%s changed nick to %s.", oldnick, u->nick);
+					send_everyone(u->nick, msg_to_client);
+				}
+				
+				free(msg_to_client);
+				free(msg_from_sock);
+				return 0;
+			}
 		}
 
 		// normal message if no commands
