@@ -50,7 +50,7 @@ int adduser(char *nick, int socket)
 
 	if (added) {
 		char *m;
-		asprintf(&m, "SERVER: User %s has joined to the server.", nick);
+		asprintf(&m, "SERVER: %s tuli kahtelemaan mitä tiällä tapahtuu.", nick);
 		printf("%s\n", m);
 		send_everyone_but(nick, m);
 		free(m);
@@ -72,12 +72,12 @@ struct user *user_find_by_socket(int socket)
 void removeuser(char *nick)
 {
 	char *m;
-	asprintf(&m, "User %s has been disconnected.", nick);
+	asprintf(&m, "%s päätti lähtee tiältä.", nick);
 	printf("%s\n", m);
 	for (int i = 0; i < MAX_USERS; i++) {
 		if (strcmp(users[i].nick, nick) == 0 && strlen(users[i].nick) > 0 && users[i].connected == 1) {
 			users[i].connected = 0;
-			memset(&users[i], 0, sizeof(struct user));			
+			memset(&users[i], 0, sizeof(struct user));
 			send_everyone("", m);
 			free(m);
 		}
@@ -207,11 +207,11 @@ int connections_handle(int sock)
 
 
 	char token[65535] = {0};
-		char command[65535] = {0};
-		char parameter[65535] = {0};
-		char cmd_[65535] = {0};
-		int r;
-		strcpy(cmd_, msg_from_sock);
+	char command[65535] = {0};
+	char parameter[65535] = {0};
+	char cmd_[65535] = {0};
+	int r;
+	strcpy(cmd_, msg_from_sock);
 	if (u != NULL) {
 
 		if (strlen(msg_from_sock) < 1 && strlen(u->nick) > 0) {
@@ -229,11 +229,11 @@ int connections_handle(int sock)
 			if (t != NULL) {
 				strcpy(parameter, t);
 			}
-			
+
 			if (strcmp(command, "/list") == 0) {
 				char users_str[65535];
 				listusers_string(users_str);
-				r = asprintf(&msg_to_client, "SERVER: All users in the channel: %s.\n", users_str);
+				r = asprintf(&msg_to_client, "SERVER: Palavelimella lie tämmösii käyttäjii: %s.\n", users_str);
 				write(sock, msg_to_client, strlen(msg_to_client));
 				free(msg_to_client);
 				free(msg_from_sock);
@@ -242,13 +242,22 @@ int connections_handle(int sock)
 
 			if (strcmp(command, "/nick") == 0) {
 				if (strlen(parameter) > 0) {
-					char oldnick[255];
-					strcpy(oldnick, u->nick);
-					strcpy(u->nick, parameter);
-					r = asprintf(&msg_to_client, "SERVER: %s changed nick to %s.\n", oldnick, u->nick);
-					send_everyone(u->nick, msg_to_client);
+					if (getsocketbynick(parameter) == sock) {
+						r = asprintf(&msg_to_client, "SERVER: Siepä oot jo sie :D elä yritä kusettaa!\n");
+						write(sock, msg_to_client, strlen(msg_to_client));
+					} else if (getsocketbynick(parameter) != -1) {
+						r = asprintf(&msg_to_client, "SERVER: et sie sua toisten nimmii varastaa!\n");
+						write(sock, msg_to_client, strlen(msg_to_client));
+					} else {
+						char oldnick[255];
+						strcpy(oldnick, u->nick);
+						strcpy(u->nick, parameter);
+						r = asprintf(&msg_to_client, "SERVER: %s vaihto nimesä tämmöseks: %s.\n", oldnick, u->nick);
+						send_everyone(u->nick, msg_to_client);
+					}
+
 				}
-				
+
 				free(msg_to_client);
 				free(msg_from_sock);
 				return 0;
@@ -257,11 +266,15 @@ int connections_handle(int sock)
 
 			if (strcmp(command, "/whois") == 0) {
 				if (strlen(parameter) > 0) {
-
-					r = asprintf(&msg_to_client, "SERVER: Mie oon %s ja miulla on sokettiloinen nrolla %d, jeejee!\n", parameter, getsocketbynick(parameter));
+					int s = getsocketbynick(parameter);
+					if (s < 0) {
+						r = asprintf(&msg_to_client, "SERVER: Eipä oo vielä yhistäny tämä kaveri :/\n");
+					} else {
+						r = asprintf(&msg_to_client, "SERVER: Tiällä on %s ja sillä on sokettiloinen nrolla %d, jeejee :D\n", parameter, s);
+					}
 					write(sock, msg_to_client, strlen(msg_to_client));
 				}
-				
+
 				free(msg_to_client);
 				free(msg_from_sock);
 				return 0;
@@ -272,14 +285,14 @@ int connections_handle(int sock)
 		send_everyone(u->nick, msg_from_sock);
 
 	} else {
-		
+
 
 		if (msg_from_sock[0] == '/') {
 			strcpy(token, strtok(cmd_, " "));
 			strcpy(command, token);
 			char *t = strtok(NULL, "\0");
 			if (t == NULL) {
-				r = asprintf(&msg_to_client, "SERVER: unknown error t == NULL\n");
+				r = asprintf(&msg_to_client, "SERVER: mittees tiällä tapahtuu? t == NULL\n");
 				write(sock, msg_to_client, strlen(msg_to_client));
 				free(msg_to_client);
 				free(msg_from_sock);
@@ -293,7 +306,7 @@ int connections_handle(int sock)
 				strcpy(nick, parameter);
 				adduser(nick, sock);
 
-				const char *welcome_msg = "SERVER: Welcome to the most awesome irc ever, %s! All users in the channel: %s.\n";
+				const char *welcome_msg = "SERVER: Ka päivvee, tulit sitte meiän servulle, %s! Meitä on täällä: %s.\n";
 				char users_str[65535];
 				listusers_string(users_str);
 				r = asprintf(&msg_to_client, welcome_msg, parameter, users_str);
@@ -305,14 +318,14 @@ int connections_handle(int sock)
 				free(nick);
 				return 0;
 			} else {
-				r = asprintf(&msg_to_client, "SERVER: please specify a nick name first! /nick <param>\n");
+				r = asprintf(&msg_to_client, "SERVER: Kerroppa miulle nikki tälleesä: /nick <param>\n");
 				write(sock, msg_to_client, strlen(msg_to_client));
 				free(msg_to_client);
 				free(msg_from_sock);
 				return 0;
 			}
 		} else {
-			r = asprintf(&msg_to_client, "SERVER: please specify a nick name /nick <param>\n");
+			r = asprintf(&msg_to_client, "SERVER: Kerroppa miulle nikki tälleesä: /nick <param>\n");
 			write(sock, msg_to_client, strlen(msg_to_client));
 			free(msg_to_client);
 			free(msg_from_sock);

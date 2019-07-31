@@ -168,9 +168,7 @@ void command_get(char *cmd)
 		}
 		str[i++] = c;
 	} while (1);
-
 	strcpy(cmd, str);
-	printf("len cmd %d\n", strlen(cmd));
 	if (strlen(cmd) == 0){
 		command_get(cmd);
 	}
